@@ -131,6 +131,10 @@ In above case, the `all` is the name of the setting, meaning all datasets are us
 
 You can customize the pretraining phase by altering hyper-parameters of encoder, vector quantization, model training. 
 
+- `--pretrain_dataset`: indicate the pretraining dataset. Same to the above. 
+- `--use_params`: use the pre-defined hyper-parameters. 
+- `--seed`: the seed used for pretraining. 
+
 <details>
   <summary><b>Encoder</b></summary>
   
@@ -159,7 +163,6 @@ You can customize the pretraining phase by altering hyper-parameters of encoder,
 <details>
   <summary><b>Training</b></summary>
   
-  - `--pretrain_dataset`: indicate the pretraining dataset.
   - `--pretrain_epochs`: the number of epochs.
   - `--pretrain_lr`: the learning rate. 
   - `--pretrain_weight_decay`: the weight of the l2 regularizer.
@@ -188,16 +191,121 @@ You can customize the pretraining phase by altering hyper-parameters of encoder,
 python GFT/finetune.py
 ```
 
-## Adaptation: Few-shot Learning
+You can set `--dataset` to indicate the downstream dataset, and `--use_params` to use the pre-defined hyper-parameters for each dataset. Other hyper-parameters you can indicate are presented as follows. 
 
-Run the command for few-shot learning:
+
+<details>
+  <summary><b>Encoder</b></summary>
+  
+  - `--hidden_dim`: the dimension in the hidden layer of GNNs.
+  - `--num_layers`: the GNN layers.
+  - `--activation`: the activation function. 
+  - `--backbone`: the backbone GNN.
+  - `--normalize`: the normalization layer. 
+  - `--dropout`: the dropout of GNN layer. 
+
+</details>
+
+
+<details>
+  <summary><b>VQ</b></summary>
+  
+  - `--code_dim`: the dimension of each code in the vocabulary.
+  - `--codebook_size`: the number of codes in the vocabulary.
+  - `--codebook_head`: the number of heads of codebook. If the number is larger than 1, you will jointly use multiple vocabularies. 
+  - `--codebook_decay`: the decay rate of codes.
+  - `--commit_weight`: the weight of the commitment term. 
+
+</details>
+
+
+<details>
+  <summary><b>Training</b></summary>
+  
+  - `--finetune_epochs`: the number of epochs.
+  - `--finetune_lr`: the learning rate. 
+  - `--early_stop`: the maximum early stop epoch. 
+  - `--batch_size`: if set to 0, conduct full graph training. 
+
+</details>
+
+
+<details>
+  <summary><b>Classifier</b></summary>
+  
+  - `--lambda_proto`: the weight of the prototype classifier in finetuning. 
+  - `--lambda_act`: the weight of linear classifier in finetuning. 
+  - `--trade_off`: the trade-off between using prototype classier or using linear classifier in inference. 
+
+</details>
+
+
+## Adaptation: Few-shot Learning
 
 ```
 # The basic command for adaptation GFT on downstream tasks via few-shot learning. 
 python GFT/finetune.py --setting few_shot
 ```
 
-## Checkpoints TODO
+
+You can set `--dataset` to indicate the downstream dataset, and `--use_params` to use the pre-defined hyper-parameters for each dataset. Other hyper-parameters you can indicate are presented as follows. 
+
+The hyper-parameters dedicated for few-shot learning are
+- `--n_train`: the number of training instances per class for finetuning the model. Note that small `n_train` achieves desirable performance $-$ Cora & WN18RR: 1; Arxiv: 5; HIV & PCBA: 20; FB15K237: 30.
+- `--n_task`: the number of sampled tasks.
+- `--n_way`: the number of ways. 
+- `--n_query`: the size of query set per way. 
+- `--n_shot`: the size of support set per way. 
+
+
+<details>
+  <summary><b>Encoder</b></summary>
+  
+  - `--hidden_dim`: the dimension in the hidden layer of GNNs.
+  - `--num_layers`: the GNN layers.
+  - `--activation`: the activation function. 
+  - `--backbone`: the backbone GNN.
+  - `--normalize`: the normalization layer. 
+  - `--dropout`: the dropout of GNN layer. 
+
+</details>
+
+
+<details>
+  <summary><b>VQ</b></summary>
+  
+  - `--code_dim`: the dimension of each code in the vocabulary.
+  - `--codebook_size`: the number of codes in the vocabulary.
+  - `--codebook_head`: the number of heads of codebook. If the number is larger than 1, you will jointly use multiple vocabularies. 
+  - `--codebook_decay`: the decay rate of codes.
+  - `--commit_weight`: the weight of the commitment term. 
+
+</details>
+
+
+<details>
+  <summary><b>Training</b></summary>
+  
+  - `--finetune_epochs`: the number of epochs.
+  - `--finetune_lr`: the learning rate. 
+  - `--early_stop`: the maximum early stop epoch. 
+  - `--batch_size`: if set to 0, conduct full graph training. 
+
+</details>
+
+
+<details>
+  <summary><b>Classifier</b></summary>
+  
+  - `--lambda_proto`: the weight of the prototype classifier in finetuning. 
+  - `--lambda_act`: the weight of linear classifier in finetuning. 
+  - `--trade_off`: the trade-off between using prototype classier or using linear classifier in inference. 
+
+</details>
+
+## Checkpoints
+
+**TODO:** We will release the pretrained model in the future. 
 
 ## Contact Us
 
