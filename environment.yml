@@ -1,4 +1,4 @@
-name: GFM-test
+name: GFT
 channels:
   - pytorch
   - pyg

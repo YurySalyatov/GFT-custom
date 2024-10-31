@@ -12,7 +12,7 @@ from torch.optim import AdamW
 from torch_geometric.utils import mask_feature, dropout_adj
 from torch_geometric.loader import NeighborLoader
 
-from dataset.process_datasets import get_pretrain_graph, get_train_node_idx, WEIGHT
+from dataset.process_datasets import get_pt_data, get_train_node_idx, WEIGHT
 from model.encoder import Encoder, InnerProductDecoder
 from model.pt_model import PretrainModel
 from model.vq import VectorQuantize
@@ -81,7 +81,7 @@ def run(params):
     params['activation'] = nn.ReLU if params['activation'] == 'relu' else nn.LeakyReLU
 
     # Data
-    pretrain_data = get_pretrain_graph(params["pretrain_dataset"])
+    pretrain_data = get_pt_data(params['data_path'], params["pretrain_dataset"])
 
     # Model
     encoder = Encoder(
@@ -132,7 +132,7 @@ def run(params):
         # Define the loader inside the loop to enable weighted sampling.
         batch_size = params["pretrain_batch_size"]
         if batch_size != 0:
-            weights = list(WEIGHT[params["weight_setting"]].values())
+            weights = list(WEIGHT[params["pretrain_dataset"]].values())
             train_nodes = get_train_node_idx(pretrain_data, weights)
             print("Number of training nodes is {}".format(len(train_nodes)))
 
@@ -163,7 +163,7 @@ def run(params):
 if __name__ == "__main__":
     params = get_args_pretrain()
 
-    params['data_path'] = ''
+    params['data_path'] = 'data/'
     params['model_path'] = 'ckpts/pretrain_model/'
 
     if params['use_params']:

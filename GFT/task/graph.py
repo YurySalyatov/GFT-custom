@@ -2,16 +2,20 @@ import numpy as np
 import torch
 from torch_geometric.loader import DataLoader
 
-from utils.eval import evaluate_graph, task2metric
+from utils.eval import evaluate, task2metric
 from utils.others import get_device_from_model, sample_proto_instances_for_graph
 
 
 # This works for standard, zero-shot, in-context
-def ft_graph(model, dataset, loader, split, labels, num_classes, optimizer, params, scheduler=None, **kwargs):
+def ft_graph(model, dataset, loader, optimizer, split, labels, params, scheduler=None, **kwargs):
     model.train()
-    device = get_device_from_model(model)
 
-    setting = kwargs["setting"]
+    device = get_device_from_model(model)
+    setting = params["setting"]
+    num_classes = params["num_classes"]
+
+    # For few-shot graph-level task, the num_instances_per_class is n_train
+    num_instances_per_class = params['num_instances_per_class']
 
     # Define prototype loader
 
@@ -20,22 +24,12 @@ def ft_graph(model, dataset, loader, split, labels, num_classes, optimizer, para
         # Standard setting contains too much instances
         # Thus we need to do sampling.
 
-        # For few-shot graph-level task, the num_instances_per_class is n_train
-        num_instances_per_class = model.num_instances_per_class
-
         # proto_idx and proto_labels are dictionaries
         proto_idx, proto_labels = sample_proto_instances_for_graph(
-            labels,
-            split['train'],
-            num_instances_per_class=num_instances_per_class,
-        )
+            labels, split['train'], num_instances_per_class=num_instances_per_class)
         flat_proto_idx = [item for sublist in proto_idx.values() for item in sublist]
         proto_dataset = dataset[flat_proto_idx]
-        proto_loader = DataLoader(
-            proto_dataset,
-            batch_size=1024,
-            num_workers=8,
-        )
+        proto_loader = DataLoader(proto_dataset, batch_size=1024, num_workers=8)
     else:
         raise NotImplementedError("The setting is not supported for sampling prototype instances.")
 
@@ -74,7 +68,7 @@ def ft_graph(model, dataset, loader, split, labels, num_classes, optimizer, para
 
         z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
         code, commit_loss = model.get_codes(z, use_orig_codes=True)
-        query_emb = z if model.use_z_in_predict else code
+        query_emb = z if params['use_z_in_predict'] else code
 
         # Compute Losses
         proto_loss = model.compute_proto_loss(query_emb, proto_emb, y, task="multi") * params["lambda_proto"]
@@ -101,22 +95,21 @@ def ft_graph(model, dataset, loader, split, labels, num_classes, optimizer, para
     }
 
 
-def eval_graph(model, dataset, loader, split, labels, num_classes, params, **kwargs):
-    train_loader = kwargs["train_loader"]
-    val_loader = kwargs["val_loader"]
-    test_loader = kwargs["test_loader"]
-    setting = kwargs["setting"]
+def eval_graph(model, dataset, loader, split, labels, params, **kwargs):
+    train_loader, val_loader, test_loader = loader
+    setting = params["setting"]
 
     if setting == 'standard':
 
-        train_value = eval_graph_single(model=model, dataset=dataset, loader=train_loader, split=split, labels=labels,
-                                        num_classes=num_classes, params=params, setting=setting)
+        # train_value = eval_graph_single(model=model, dataset=dataset, loader=train_loader, split=split, labels=labels,
+        #                                 params=params, setting=setting)
+        train_value = 0
 
         val_value = eval_graph_single(model=model, dataset=dataset, loader=val_loader, split=split, labels=labels,
-                                      num_classes=num_classes, params=params, setting=setting)
+                                      params=params, setting=setting)
 
         test_value = eval_graph_single(model=model, dataset=dataset, loader=test_loader, split=split, labels=labels,
-                                       num_classes=num_classes, params=params, setting=setting)
+                                       params=params, setting=setting)
 
         return {
             'train': train_value,
@@ -127,31 +120,25 @@ def eval_graph(model, dataset, loader, split, labels, num_classes, params, **kwa
 
     else:
         return eval_graph_few_shot(model=model, dataset=dataset, loader=loader, split=split, labels=labels,
-                                   num_classes=num_classes, params=params, setting=setting)
+                                   params=params, setting=setting)
 
 
 # This works for standard setting
-def eval_graph_single(model, dataset, loader, split, labels, num_classes, params, **kwargs):
+def eval_graph_single(model, dataset, loader, split, labels, params, **kwargs):
     model.eval()
     device = get_device_from_model(model)
     setting = kwargs["setting"]
+    num_classes = params["num_classes"]
 
     # Standard setting contains too much instances
     # Thus we need to do sampling.
 
     # proto_idx and proto_labels are dictionaries
-    proto_idx, proto_labels = sample_proto_instances_for_graph(
-        labels,
-        split['train'],
-        num_instances_per_class=model.num_instances_per_class,
-    )
+    proto_idx, proto_labels = sample_proto_instances_for_graph(labels, split['train'],
+                                                               num_instances_per_class=model.num_instances_per_class)
     flat_proto_idx = [item for sublist in proto_idx.values() for item in sublist]
     proto_dataset = dataset[flat_proto_idx]
-    proto_loader = DataLoader(
-        proto_dataset,
-        batch_size=1024,
-        num_workers=8,
-    )
+    proto_loader = DataLoader(proto_dataset, batch_size=1024, num_workers=8)
 
     code_list = []
     for batch in proto_loader:
@@ -188,24 +175,25 @@ def eval_graph_single(model, dataset, loader, split, labels, num_classes, params
         pred_list.append(pred.detach())
 
     # Evaluate
-    y = torch.cat(y_list, dim=0).detach().cpu().numpy()
-    y[y == 0] = -1
-    pred = torch.cat(pred_list, dim=0).detach().cpu().numpy()
-    roc = evaluate_graph(pred, y)
+    y = torch.cat(y_list, dim=0)
+    # y[y == 0] = -1
+    pred = torch.cat(pred_list, dim=0)
+    # value = evaluate_graph(pred, y)
+    value = evaluate(pred, y, params=params)
 
-    return roc
+    return value
 
 
-# This works for few-shot, zero-shot, and in-context
-def eval_graph_few_shot(model, dataset, loader, split, labels, num_classes, params, **kwargs):
+def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs):
     model.eval()
     device = get_device_from_model(model)
-    setting = kwargs["setting"]
+    setting = params["setting"]
+    num_classes = params["num_classes"]
 
-    assert setting in ["few_shot", "zero_shot", "in_context"]
+    assert setting in ["few_shot"]
 
-    valid_as_test = setting in ["zero_shot", "in_context"]
-    use_outer_proto_emb = setting in ["zero_shot"]
+    # valid_as_test = setting in ["zero_shot", "in_context"]
+    # use_outer_proto_emb = setting in ["zero_shot"]
     n_task = len(split['test']['support']['idx'])
     train_values, val_values, test_values = [], [], []
 
@@ -236,11 +224,7 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, num_classes, para
             code_list.append(code.detach())
 
         code = torch.cat(code_list, dim=0)
-        if use_outer_proto_emb:
-            proto_emb = dataset.class_node_text_feat.to(device)
-            proto_emb, _ = model.get_codes(proto_emb, use_orig_codes=True)
-        else:
-            proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
+        proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
 
         # Prediction
 
@@ -271,90 +255,80 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, num_classes, para
             y_list.append(batch.y.view(pred.shape))
             pred_list.append(pred.detach())
 
-        # Evaluation
+        # Evaluate
+        y = torch.cat(y_list, dim=0)
+        pred = torch.cat(pred_list, dim=0)
+        value = evaluate(pred, y, params=params)
 
-        y = torch.cat(y_list, dim=0).detach().cpu().numpy()
-        y[y == 0] = -1
-        pred = torch.cat(pred_list, dim=0).detach().cpu().numpy()
-        roc = evaluate_graph(pred, y)
+        train_values.append(value)
+        val_values.append(value)
+        # if valid_as_test:
+        #     test_values.append(value)
 
-        train_values.append(roc)
-        val_values.append(roc)
-        if valid_as_test:
-            test_values.append(roc)
+    for i in range(n_task):
+        s_idx, s_label = split['test']['support']['idx'][i], split['test']['support']['label'][i]
+        q_idx, q_label = split['test']['query']['idx'][i], split['test']['query']['label'][i]
 
-    # Test: only few-shot
-    if not valid_as_test:
-        for i in range(n_task):
-            s_idx, s_label = split['test']['support']['idx'][i], split['test']['support']['label'][i]
-            q_idx, q_label = split['test']['query']['idx'][i], split['test']['query']['label'][i]
+        # Get prototypes
 
-            # Get prototypes
+        flat_s_idx = [item for sublist in s_idx.values() for item in sublist]
+        proto_dataset = dataset[flat_s_idx]
+        proto_loader = DataLoader(
+            proto_dataset,
+            batch_size=1024,
+            num_workers=8,
+        )
 
-            flat_s_idx = [item for sublist in s_idx.values() for item in sublist]
-            proto_dataset = dataset[flat_s_idx]
-            proto_loader = DataLoader(
-                proto_dataset,
-                batch_size=1024,
-                num_workers=8,
-            )
+        code_list = []
+        for batch in proto_loader:
+            batch = batch.to(device)
 
-            code_list = []
-            for batch in proto_loader:
-                batch = batch.to(device)
+            x = batch.node_text_feat
+            edge_index = batch.edge_index
+            edge_attr = batch.edge_text_feat
 
-                x = batch.node_text_feat
-                edge_index = batch.edge_index
-                edge_attr = batch.edge_text_feat
+            z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
+            code, _ = model.get_codes(z, use_orig_codes=True)
+            code_list.append(code.detach())
 
-                z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-                code, _ = model.get_codes(z, use_orig_codes=True)
-                code_list.append(code.detach())
+        code = torch.cat(code_list, dim=0)
+        proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
 
-            code = torch.cat(code_list, dim=0)
-            if use_outer_proto_emb:
-                proto_emb = dataset.class_node_text_feat.to(device)
-                proto_emb, _ = model.get_codes(proto_emb, use_orig_codes=True)
-            else:
-                proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
+        # Prediction
 
-            # Prediction
+        flat_q_idx = [item for sublist in q_idx.values() for item in sublist]
+        query_dataset = dataset[flat_q_idx]
+        query_loader = DataLoader(
+            query_dataset,
+            batch_size=1024,
+            num_workers=8,
+        )
 
-            flat_q_idx = [item for sublist in q_idx.values() for item in sublist]
-            query_dataset = dataset[flat_q_idx]
-            query_loader = DataLoader(
-                query_dataset,
-                batch_size=1024,
-                num_workers=8,
-            )
+        y_list, pred_list = [], []
+        for step, batch in enumerate(query_loader):
+            batch = batch.to(device)
 
-            y_list, pred_list = [], []
-            for step, batch in enumerate(query_loader):
-                batch = batch.to(device)
+            x = batch.node_text_feat
+            edge_index = batch.edge_index
+            edge_attr = batch.edge_text_feat
 
-                x = batch.node_text_feat
-                edge_index = batch.edge_index
-                edge_attr = batch.edge_text_feat
+            z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
+            code, commit_loss = model.get_codes(z, use_orig_codes=True)
+            query_emb = z if model.use_z_in_predict else code
 
-                z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-                code, commit_loss = model.get_codes(z, use_orig_codes=True)
-                query_emb = z if model.use_z_in_predict else code
+            pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
+            pred_lin = model.get_lin_logits(z).mean(1)
+            pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
 
-                pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
-                pred_lin = model.get_lin_logits(z).mean(1)
-                pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
+            y_list.append(batch.y.view(pred.shape))
+            pred_list.append(pred.detach())
 
-                y_list.append(batch.y.view(pred.shape))
-                pred_list.append(pred.detach())
+        # Evaluate
+        y = torch.cat(y_list, dim=0)
+        pred = torch.cat(pred_list, dim=0)
+        value = evaluate(pred, y, params=params)
 
-            # Evaluation
-
-            y = torch.cat(y_list, dim=0).detach().cpu().numpy()
-            y[y == 0] = -1
-            pred = torch.cat(pred_list, dim=0).detach().cpu().numpy()
-            roc = evaluate_graph(pred, y)
-
-            test_values.append(roc)
+        test_values.append(value)
 
     return {
         'train': np.mean(train_values),

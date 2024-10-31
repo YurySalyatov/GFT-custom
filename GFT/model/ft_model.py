@@ -42,9 +42,7 @@ def distance_metric(a, b, use_cosine_sim=True):
     return -logits
 
 
-def efficient_compute_class_prototypes(
-        embeddings, classes, num_classes_in_total, return_head_first=True
-):
+def efficient_compute_class_prototypes(embeddings, classes, num_classes_in_total, return_head_first=True):
     # Embeddings (z) shape: [n, d] or [n, h, d] or [r, n, h, d]
     # Classes shape: [n] or [r, n]
     # return_head_first: if True, the first dimension of the output will be the heads, otherwise it will be the classes
@@ -159,7 +157,6 @@ class TaskModel(nn.Module):
 
     def get_class_prototypes(self, z, y, num_classes_in_total):
         if isinstance(y, dict):
-            # TODO: Extend to multiple non-binary task
             # This works for graph classification with multiple binary tasks
 
             n_task = len(y)

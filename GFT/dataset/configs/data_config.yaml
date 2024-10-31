@@ -23,7 +23,7 @@ logic_arxiv: &logic_arxiv
   eval_metric: auc
   eval_func: flat_auc
 
-cora_node: &cora_node
+cora: &cora
   <<: *E2E-node
   dataset_name: Cora
   dataset_splitter: CiteSplitter
@@ -31,13 +31,13 @@ cora_node: &cora_node
   num_classes: 7
 
 logic_cora: &logic_cora
-  <<: *cora_node
+  <<: *cora
   task_level: logic_e2e
   process_label_func: process_logic_label
   eval_metric: auc
   eval_func: flat_auc
 
-pubmed_node: &pubmed_node
+pubmed: &pubmed
   <<: *E2E-node
   dataset_name: Pubmed
   dataset_splitter: CiteSplitter

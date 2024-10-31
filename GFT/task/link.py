@@ -10,164 +10,51 @@ from utils.eval import evaluate, task2metric
 from utils.others import get_device_from_model, sample_proto_instances, mask2idx
 
 
-def ft_link(model, dataset, loader, split, labels, num_classes, optimizer, params, scheduler=None, **kwargs):
+def ft_link(model, dataset, loader, optimizer, split, labels, params, scheduler=None, **kwargs):
     model.train()
 
-    query_node_code_first = kwargs["query_node_code_first"]
-
-    # Encode
-
-    x = dataset.node_text_feat[dataset.x]
-    edge_index = dataset.edge_index
-    edge_attr = dataset.edge_text_feat[dataset.xe]
-    y = labels
-
-    z = model.encode(x, edge_index, edge_attr)
-
-    # Compute edge embeddings
-
-    train_mask = split["train"]
-    edge_index_train, y_train = edge_index[:, train_mask], y[train_mask]
-    edge_z_train = (z[edge_index_train[0]] + z[edge_index_train[1]]) / 2
-
-    # Compute Prototypes
-
-    if query_node_code_first:
-        # Case 1: Use node code to form edge code
-        code, commit_loss = model.get_codes(z, use_orig_codes=True)
-        edge_code_train = (code[edge_index_train[0]] + code[edge_index_train[1]]) / 2
-    else:
-        # Case 2: Query edge code using edge embeddings directly
-        # This is the default case.
-        edge_code_train, commit_loss = model.get_codes(edge_z_train, use_orig_codes=True)
-
-    proto_emb = model.get_class_prototypes(edge_code_train, y_train, num_classes).detach()
-    query_emb = edge_z_train if model.use_z_in_predict else edge_code_train  # Use train set
-
-    # Compute Losses
-
-    proto_loss = model.compute_proto_loss(query_emb, proto_emb, y_train) * params["lambda_proto"]
-    proto_reg = model.compute_proto_reg(proto_emb) * params["lambda_proto_reg"]
-    act_loss = model.compute_activation_loss(edge_z_train, y_train) * params["lambda_act"]
-    loss = proto_loss + proto_reg + act_loss
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    if scheduler:
-        scheduler.step()
-
-    return {
-        'proto_loss': proto_loss.item(),
-        'proto_reg': proto_reg.item(),
-        'act_loss': act_loss.item(),
-        'loss': loss.item(),
-    }
-
-
-def ft_link_batch(model, dataset, loader, split, labels, num_classes, optimizer, params, scheduler=None, **kwargs):
-    model.train()
     device = get_device_from_model(model)
+    setting = params["setting"]
+    num_classes = params["num_classes"]
+    query_node_code_first = params["query_node_code_first"]
 
-    setting = kwargs["setting"]
-    query_node_code_first = kwargs["query_node_code_first"]
-
-    # Get prototype loader
-
-    if setting == "standard":
-
-        # For standard setting, we sample instances from
-        # the training set to form prototypes.
-
-        proto_idx = sample_proto_instances(
-            labels,
-            mask2idx(split["train"]),
-            num_instances_per_class=model.num_instances_per_class,
-        )
-        proto_loader = LinkNeighborLoader(
-            dataset,
-            num_neighbors=kwargs["num_neighbors"],
-            edge_label_index=dataset.edge_index[:, proto_idx],
-            edge_label=labels[proto_idx],
-            batch_size=1024,
-            num_workers=8,
-        )
-    elif setting in ["few_shot"]:
-        # In few-shot setting, we can directly use all instances
-        # As the number of instances is small.
-        proto_loader = loader
-
-    # Encode Prototypes
-
-    code_list, y_list = [], []
-    for batch in proto_loader:
-        batch = batch.to(device)
-
-        x = batch.node_text_feat
-        edge_index = batch.edge_index
-        edge_attr = batch.edge_text_feat[batch.xe]
-        edge_label_index = batch.edge_label_index
-        y = batch.edge_label
-
-        z = model.encode(x, edge_index, edge_attr)
-        edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
-
-        if query_node_code_first:
-            # Case 1: Use node code to form edge code
-            code, _ = model.get_codes(z, use_orig_codes=True)
-            edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
-        else:
-            # Case 2: Query edge code using edge embeddings directly
-            edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
-
-        code_list.append(edge_code.detach())
-        y_list.append(y)
-
-    edge_code = torch.cat(code_list, dim=0)
-    y = torch.cat(y_list, dim=0)
-    proto_emb = model.get_class_prototypes(edge_code, y, num_classes)
-
-    # Start Training
-
-    total_proto_loss = 0
-    total_proto_reg = 0
-    total_act_loss = 0
-    total_loss = 0
-
-    for batch in loader:
-        batch = batch.to(device)
-
+    mini_batch = loader is not None
+    if not mini_batch:
         # Encode
-        x = batch.node_text_feat
-        edge_index = batch.edge_index
-        edge_attr = batch.edge_text_feat[batch.xe]
-        edge_label_index = batch.edge_label_index
-        y = batch.edge_label
+
+        x = dataset.node_text_feat[dataset.x]
+        edge_index = dataset.edge_index
+        edge_attr = dataset.edge_text_feat[dataset.xe]
+        y = labels
 
         z = model.encode(x, edge_index, edge_attr)
-        edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
+
+        # Compute edge embeddings
+
+        train_mask = split["train"]
+        edge_index_train, y_train = edge_index[:, train_mask], y[train_mask]
+        edge_z_train = (z[edge_index_train[0]] + z[edge_index_train[1]]) / 2
+
+        # Compute Prototypes
 
         if query_node_code_first:
             # Case 1: Use node code to form edge code
             code, commit_loss = model.get_codes(z, use_orig_codes=True)
-            edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
+            edge_code_train = (code[edge_index_train[0]] + code[edge_index_train[1]]) / 2
         else:
             # Case 2: Query edge code using edge embeddings directly
-            edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
+            # This is the default case.
+            edge_code_train, commit_loss = model.get_codes(edge_z_train, use_orig_codes=True)
 
-        query_emb = edge_z if model.use_z_in_predict else edge_code  # Use train set
+        proto_emb = model.get_class_prototypes(edge_code_train, y_train, num_classes).detach()
+        query_emb = edge_z_train if params['use_z_in_predict'] else edge_code_train  # Use train set
 
         # Compute Losses
 
-        proto_loss = model.compute_proto_loss(query_emb, proto_emb, y) * params["lambda_proto"]
+        proto_loss = model.compute_proto_loss(query_emb, proto_emb, y_train) * params["lambda_proto"]
         proto_reg = model.compute_proto_reg(proto_emb) * params["lambda_proto_reg"]
-        act_loss = model.compute_activation_loss(edge_z, y) * params["lambda_act"]
+        act_loss = model.compute_activation_loss(edge_z_train, y_train) * params["lambda_act"]
         loss = proto_loss + proto_reg + act_loss
-
-        total_proto_loss += proto_loss.item()
-        total_proto_reg += proto_reg.item()
-        total_act_loss += act_loss.item()
-        total_loss += loss.item()
 
         optimizer.zero_grad()
         loss.backward()
@@ -175,132 +62,222 @@ def ft_link_batch(model, dataset, loader, split, labels, num_classes, optimizer,
         if scheduler:
             scheduler.step()
 
-    return {
-        'proto_loss': total_proto_loss / len(loader),
-        'proto_reg': total_proto_reg / len(loader),
-        'act_loss': total_act_loss / len(loader),
-        'loss': total_loss / len(loader),
-    }
+        return {
+            'proto_loss': proto_loss.item(),
+            'proto_reg': proto_reg.item(),
+            'act_loss': act_loss.item(),
+            'loss': loss.item(),
+        }
+    else:
+        # Get prototype loader
+        if setting == "standard":
 
+            # For standard setting, we sample instances from
+            # the training set to form prototypes.
 
-def eval_link(model, dataset, loader, split, labels, num_classes, params, **kwargs):
-    model.eval()
-    setting = params["setting"]
-    query_node_code_first = kwargs["query_node_code_first"]
+            proto_idx = sample_proto_instances(labels, mask2idx(split["train"]),
+                                               num_instances_per_class=params['num_instances_per_class'])
+            proto_loader = LinkNeighborLoader(
+                dataset,
+                num_neighbors=kwargs["num_neighbors"],
+                edge_label_index=dataset.edge_index[:, proto_idx],
+                edge_label=labels[proto_idx],
+                batch_size=1024,
+                num_workers=8,
+            )
+        elif setting in ["few_shot"]:
+            # In few-shot setting, we can directly use all instances
+            # As the number of instances is small.
+            proto_loader = loader
 
-    # Encode
+        # Encode Prototypes
 
-    x = dataset.node_text_feat[dataset.x]
-    edge_index = dataset.edge_index
-    edge_attr = dataset.edge_text_feat[dataset.xe]
-    y = labels
+        code_list, y_list = [], []
+        for batch in proto_loader:
+            batch = batch.to(device)
 
-    z = model.encode(x, edge_index, edge_attr)
+            x = batch.node_text_feat
+            edge_index = batch.edge_index
+            edge_attr = batch.edge_text_feat[batch.xe]
+            edge_label_index = batch.edge_label_index
+            y = batch.edge_label
 
-    if setting == "standard":
+            z = model.encode(x, edge_index, edge_attr)
+            edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
 
-        # Compute Prototypes
+            if query_node_code_first:
+                # Case 1: Use node code to form edge code
+                code, _ = model.get_codes(z, use_orig_codes=True)
+                edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
+            else:
+                # Case 2: Query edge code using edge embeddings directly
+                edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
 
-        train_mask = split["train"]
-        edge_index_train, y_train = edge_index[:, train_mask], y[train_mask]
-        edge_z = (z[edge_index[0]] + z[edge_index[1]]) / 2
+            code_list.append(edge_code.detach())
+            y_list.append(y)
 
-        if query_node_code_first:
-            # Case 1: Query node code first and then form edge code
-            code, _ = model.get_codes(z, use_orig_codes=True)
-            edge_code = (code[edge_index[0]] + code[edge_index[1]]) / 2
-            edge_code_train = edge_code[train_mask]
-        else:
-            # Case 2: Query edge code directly
-            edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
-            edge_code_train = edge_code[train_mask]
+        edge_code = torch.cat(code_list, dim=0)
+        y = torch.cat(y_list, dim=0)
+        proto_emb = model.get_class_prototypes(edge_code, y, num_classes)
 
-        proto_emb = model.get_class_prototypes(edge_code_train, y_train, num_classes).detach()
-        query_emb = edge_z if model.use_z_in_predict else edge_code  # Use all instances
+        # Start Training
 
-        # Compute logits
+        total_proto_loss = 0
+        total_proto_reg = 0
+        total_act_loss = 0
+        total_loss = 0
 
-        pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
-        pred_lin = model.get_lin_logits(edge_z).mean(1).softmax(dim=-1)
-        pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
+        for batch in loader:
+            batch = batch.to(device)
 
-        # Evaluate
+            # Encode
+            x = batch.node_text_feat
+            edge_index = batch.edge_index
+            edge_attr = batch.edge_text_feat[batch.xe]
+            edge_label_index = batch.edge_label_index
+            y = batch.edge_label
 
-        train_mask, val_mask, test_mask = (
-            split["train"],
-            split["valid"],
-            split["test"],
-        )
-        train_value = evaluate(pred, y, train_mask, params)
-        val_value = evaluate(pred, y, val_mask, params)
-        test_value = evaluate(pred, y, test_mask, params)
+            z = model.encode(x, edge_index, edge_attr)
+            edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
+
+            if query_node_code_first:
+                # Case 1: Use node code to form edge code
+                code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
+            else:
+                # Case 2: Query edge code using edge embeddings directly
+                edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
+
+            query_emb = edge_z if params['use_z_in_predict'] else edge_code  # Use train set
+
+            # Compute Losses
+
+            proto_loss = model.compute_proto_loss(query_emb, proto_emb, y) * params["lambda_proto"]
+            proto_reg = model.compute_proto_reg(proto_emb) * params["lambda_proto_reg"]
+            act_loss = model.compute_activation_loss(edge_z, y) * params["lambda_act"]
+            loss = proto_loss + proto_reg + act_loss
+
+            total_proto_loss += proto_loss.item()
+            total_proto_reg += proto_reg.item()
+            total_act_loss += act_loss.item()
+            total_loss += loss.item()
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if scheduler:
+                scheduler.step()
 
         return {
-            'train': train_value,
-            'val': val_value,
-            'test': test_value,
-            'metric': task2metric[params['task']]
+            'proto_loss': total_proto_loss / len(loader),
+            'proto_reg': total_proto_reg / len(loader),
+            'act_loss': total_act_loss / len(loader),
+            'loss': total_loss / len(loader),
         }
 
-    elif setting in ["few_shot", "in_context", "zero_shot"]:
-        valid_as_test = setting in ["zero_shot", "in_context"]
-        use_outer_proto_emb = setting in ["zero_shot"]
 
-        n_task = len(split["valid"]["support"])
-        train_values, val_values, test_values = [], [], []
+def eval_link(model, dataset, loader, split, labels, params, **kwargs):
+    model.eval()
+    device = get_device_from_model(model)
+    setting = params["setting"]
+    num_classes = params["num_classes"]
+    query_node_code_first = kwargs["query_node_code_first"]
 
-        # Validation: few-shot, zero-shot, in-context
-        # For zero-shot and in-context, the validation is the same as test.
-        for i in range(n_task):
-            s_mask = split["valid"]["support"][i]
-            q_mask = split["valid"]["query"][i]
+    mini_batch = loader is not None
+    if not mini_batch:
+        # Encode
 
-            # Encode edge embedding
+        x = dataset.node_text_feat[dataset.x]
+        edge_index = dataset.edge_index
+        edge_attr = dataset.edge_text_feat[dataset.xe]
+        y = labels
 
-            edge_index_support, y_support = edge_index[:, s_mask], y[s_mask]
-            edge_index_query, y_query = edge_index[:, q_mask], y[q_mask]
-            edge_z_support = (z[edge_index_support[0]] + z[edge_index_support[1]]) / 2
-            edge_z_query = (z[edge_index_query[0]] + z[edge_index_query[1]]) / 2
+        z = model.encode(x, edge_index, edge_attr)
 
-            # Compute edge prototypes
+        if setting == "standard":
+            # Compute Prototypes
+
+            train_mask = split["train"]
+            edge_index_train, y_train = edge_index[:, train_mask], y[train_mask]
+            edge_z = (z[edge_index[0]] + z[edge_index[1]]) / 2
 
             if query_node_code_first:
                 # Case 1: Query node code first and then form edge code
                 code, _ = model.get_codes(z, use_orig_codes=True)
-                edge_code_support = (code[edge_index_support[0]] + code[edge_index_support[1]]) / 2
-                edge_code_query = (code[edge_index_query[0]] + code[edge_index_query[1]]) / 2
+                edge_code = (code[edge_index[0]] + code[edge_index[1]]) / 2
+                edge_code_train = edge_code[train_mask]
             else:
                 # Case 2: Query edge code directly
-                edge_code_support, _ = model.get_codes(edge_z_support, use_orig_codes=True)
-                edge_code_query, _ = model.get_codes(edge_z_query, use_orig_codes=True)
+                edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
+                edge_code_train = edge_code[train_mask]
 
-            if use_outer_proto_emb:
-                proto_emb = dataset.class_node_text_feat
-                proto_emb, _ = model.get_codes(proto_emb, use_orig_codes=True)
-            else:
-                proto_emb = model.get_class_prototypes(
-                    edge_code_support, y_support, num_classes
-                ).detach()
-
-            query_emb = edge_z_query if model.use_z_in_predict else edge_code_query
+            proto_emb = model.get_class_prototypes(edge_code_train, y_train, num_classes).detach()
+            query_emb = edge_z if model.use_z_in_predict else edge_code  # Use all instances
 
             # Compute logits
 
             pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
-            pred_lin = model.get_lin_logits(edge_z_query).mean(1).softmax(dim=-1)
+            pred_lin = model.get_lin_logits(edge_z).mean(1).softmax(dim=-1)
             pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
 
             # Evaluate
 
-            value = evaluate(pred, y_query)
-            train_values.append(value)
-            val_values.append(value)
+            train_mask, val_mask, test_mask = (split["train"], split["valid"], split["test"])
+            train_value = evaluate(pred, y, train_mask, params)
+            val_value = evaluate(pred, y, val_mask, params)
+            test_value = evaluate(pred, y, test_mask, params)
 
-            if valid_as_test:
-                test_values.append(value)
+            return {
+                'train': train_value,
+                'val': val_value,
+                'test': test_value,
+                'metric': task2metric[params['task']]
+            }
 
-        # Test: few-shot
-        if not valid_as_test:
+        elif setting == "few_shot":
+            n_task = len(split["valid"]["support"])
+            train_values, val_values, test_values = [], [], []
+
+            # Validation: few-shot, zero-shot, in-context
+            # For zero-shot and in-context, the validation is the same as test.
+            for i in range(n_task):
+                s_mask = split["valid"]["support"][i]
+                q_mask = split["valid"]["query"][i]
+
+                # Encode edge embedding
+
+                edge_index_support, y_support = edge_index[:, s_mask], y[s_mask]
+                edge_index_query, y_query = edge_index[:, q_mask], y[q_mask]
+                edge_z_support = (z[edge_index_support[0]] + z[edge_index_support[1]]) / 2
+                edge_z_query = (z[edge_index_query[0]] + z[edge_index_query[1]]) / 2
+
+                # Compute edge prototypes
+
+                if query_node_code_first:
+                    # Case 1: Query node code first and then form edge code
+                    code, _ = model.get_codes(z, use_orig_codes=True)
+                    edge_code_support = (code[edge_index_support[0]] + code[edge_index_support[1]]) / 2
+                    edge_code_query = (code[edge_index_query[0]] + code[edge_index_query[1]]) / 2
+                else:
+                    # Case 2: Query edge code directly
+                    edge_code_support, _ = model.get_codes(edge_z_support, use_orig_codes=True)
+                    edge_code_query, _ = model.get_codes(edge_z_query, use_orig_codes=True)
+
+                proto_emb = model.get_class_prototypes(edge_code_support, y_support, num_classes).detach()
+                query_emb = edge_z_query if model.use_z_in_predict else edge_code_query
+
+                # Compute logits
+
+                pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
+                pred_lin = model.get_lin_logits(edge_z_query).mean(1).softmax(dim=-1)
+                pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
+
+                # Evaluate
+
+                value = evaluate(pred, y_query)
+                train_values.append(value)
+                val_values.append(value)
+
             for i in range(n_task):
                 s_mask = split["test"]["support"][i]
                 q_mask = split["test"]["query"][i]
@@ -324,14 +301,7 @@ def eval_link(model, dataset, loader, split, labels, num_classes, params, **kwar
                     edge_code_support, _ = model.get_codes(edge_z_support, use_orig_codes=True)
                     edge_code_query, _ = model.get_codes(edge_z_query, use_orig_codes=True)
 
-                if use_outer_proto_emb:
-                    proto_emb = dataset.class_node_text_feat
-                    proto_emb, _ = model.get_codes(proto_emb, use_orig_codes=True)
-                else:
-                    proto_emb = model.get_class_prototypes(
-                        edge_code_support, y_support, num_classes
-                    ).detach()
-
+                proto_emb = model.get_class_prototypes(edge_code_support, y_support, num_classes).detach()
                 query_emb = edge_z_query if model.use_z_in_predict else edge_code_query
 
                 # Compute logits
@@ -345,152 +315,29 @@ def eval_link(model, dataset, loader, split, labels, num_classes, params, **kwar
                 value = evaluate(pred, y_query)
                 test_values.append(value)
 
-        return {
-            'train': np.mean(train_values),
-            'val': np.mean(val_values),
-            'test': np.mean(test_values),
-            'metric': task2metric[params['task']]
-        }
+            return {
+                'train': np.mean(train_values),
+                'val': np.mean(val_values),
+                'test': np.mean(test_values),
+                'metric': task2metric[params['task']]
+            }
+    else:
+        if setting == "standard":
+            # Get prototype loader
+            # Only works in standard setting
+            proto_idx = sample_proto_instances(labels, mask2idx(split["train"]),
+                                               num_instances_per_class=params['num_instances_per_class'])
 
-
-def eval_link_batch(model, dataset, loader, split, labels, num_classes, params, **kwargs):
-    model.eval()
-    device = get_device_from_model(model)
-    setting = params["setting"]
-    query_node_code_first = params["query_node_code_first"]
-
-    if setting == "standard":
-
-        # Get prototype loader
-        # Only works in standard setting
-        proto_idx = sample_proto_instances(labels, mask2idx(split["train"]),
-                                           num_instances_per_class=params['num_instances_per_class'])
-        proto_loader = LinkNeighborLoader(
-            dataset,
-            num_neighbors=kwargs["num_neighbors"],
-            edge_label_index=dataset.edge_index[:, proto_idx],
-            edge_label=labels[proto_idx],
-            batch_size=1024,
-            num_workers=8,
-        )
-
-        # Encode Prototypes
-
-        code_list, y_list = [], []
-        for batch in proto_loader:
-            batch = batch.to(device)
-
-            x = batch.node_text_feat
-            edge_index = batch.edge_index
-            edge_attr = batch.edge_text_feat[batch.xe]
-            y = batch.edge_label
-            edge_label_index = batch.edge_label_index
-
-            z = model.encode(x, edge_index, edge_attr)
-            edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
-
-            if query_node_code_first:
-                # Case 1: Use node code to form edge code
-                code, _ = model.get_codes(z, use_orig_codes=True)
-                edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
-            else:
-                # Case 2: Query edge code using edge embeddings directly
-                edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
-
-            code_list.append(edge_code.detach())
-            y_list.append(y)
-
-        edge_code = torch.cat(code_list, dim=0)
-        y = torch.cat(y_list, dim=0)
-        proto_emb = model.get_class_prototypes(edge_code, y, num_classes)
-
-        # Prediction
-
-        pred_list, y_list = [], []
-        for batch in loader:
-            batch = batch.to(device)
-
-            # Encode
-            x = batch.node_text_feat
-            edge_index = batch.edge_index
-            edge_attr = batch.edge_text_feat[batch.xe]
-            edge_label_index = batch.edge_label_index
-            y = batch.edge_label
-
-            z = model.encode(x, edge_index, edge_attr)
-            edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
-
-            if query_node_code_first:
-                # Case 1: Use node code to form edge code
-                code, commit_loss = model.get_codes(z, use_orig_codes=True)
-                edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
-            else:
-                # Case 2: Query edge code using edge embeddings directly
-                edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
-
-            query_emb = edge_z if model.use_z_in_predict else edge_code  # Use train set
-
-            # Compute logits
-
-            pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
-            pred_lin = model.get_lin_logits(edge_z).mean(1).softmax(dim=-1)
-            pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
-
-            pred_list.append(pred.detach())
-            y_list.append(y)
-
-        # Evaluate
-
-        pred = torch.cat(pred_list, dim=0)
-        y = torch.cat(y_list, dim=0)
-
-        train_mask, val_mask, test_mask = (
-            split["train"],
-            split["valid"],
-            split["test"],
-        )
-        train_value = evaluate(pred, y, train_mask, params)
-        val_value = evaluate(pred, y, val_mask, params)
-        test_value = evaluate(pred, y, test_mask, params)
-
-        return {
-            'train': train_value,
-            'val': val_value,
-            'test': test_value,
-            'metric': task2metric[params['task']]
-        }
-
-    elif setting in ["few_shot", "zero_shot", "in_context"]:
-        valid_as_test = setting in ["zero_shot", "in_context"]
-        use_outer_proto_emb = setting in ["zero_shot"]
-
-        n_task = len(split["valid"]["support"])
-        train_values, val_values, test_values = [], [], []
-
-        # Validation: few-shot, zero-shot, in-context
-        for i in range(n_task):
-            s_mask = split["valid"]["support"][i]
-            q_mask = split["valid"]["query"][i]
-
-            # Define loaders for support and query sets
             proto_loader = LinkNeighborLoader(
                 dataset,
                 num_neighbors=kwargs["num_neighbors"],
-                edge_label_index=dataset.edge_index[:, s_mask],
-                edge_label=labels[s_mask],
-                batch_size=1024,
-                num_workers=8,
-            )
-            query_loader = LinkNeighborLoader(
-                dataset,
-                num_neighbors=kwargs["num_neighbors"],
-                edge_label_index=dataset.edge_index[:, q_mask],
-                edge_label=labels[q_mask],
+                edge_label_index=dataset.edge_index[:, proto_idx],
+                edge_label=labels[proto_idx],
                 batch_size=1024,
                 num_workers=8,
             )
 
-            # Construct prototypes based on support set
+            # Encode Prototypes
 
             code_list, y_list = [], []
             for batch in proto_loader:
@@ -499,8 +346,8 @@ def eval_link_batch(model, dataset, loader, split, labels, num_classes, params, 
                 x = batch.node_text_feat
                 edge_index = batch.edge_index
                 edge_attr = batch.edge_text_feat[batch.xe]
-                edge_label_index = batch.edge_label_index
                 y = batch.edge_label
+                edge_label_index = batch.edge_label_index
 
                 z = model.encode(x, edge_index, edge_attr)
                 edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
@@ -515,21 +362,18 @@ def eval_link_batch(model, dataset, loader, split, labels, num_classes, params, 
 
                 code_list.append(edge_code.detach())
                 y_list.append(y)
-            code = torch.cat(code_list, dim=0)
+
+            edge_code = torch.cat(code_list, dim=0)
             y = torch.cat(y_list, dim=0)
+            proto_emb = model.get_class_prototypes(edge_code, y, num_classes)
 
-            if use_outer_proto_emb:
-                proto_emb = dataset.class_node_text_feat
-                proto_emb, _ = model.get_codes(proto_emb, use_orig_codes=True)
-            else:
-                proto_emb = model.get_class_prototypes(code, y, num_classes)
-
-            # Compute logits
+            # Prediction
 
             pred_list, y_list = [], []
-            for batch in query_loader:
+            for batch in loader:
                 batch = batch.to(device)
 
+                # Encode
                 x = batch.node_text_feat
                 edge_index = batch.edge_index
                 edge_attr = batch.edge_text_feat[batch.xe]
@@ -547,7 +391,9 @@ def eval_link_batch(model, dataset, loader, split, labels, num_classes, params, 
                     # Case 2: Query edge code using edge embeddings directly
                     edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
 
-                query_emb = edge_z if model.use_z_in_predict else edge_code
+                query_emb = edge_z if model.use_z_in_predict else edge_code  # Use train set
+
+                # Compute logits
 
                 pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
                 pred_lin = model.get_lin_logits(edge_z).mean(1).softmax(dim=-1)
@@ -556,18 +402,123 @@ def eval_link_batch(model, dataset, loader, split, labels, num_classes, params, 
                 pred_list.append(pred.detach())
                 y_list.append(y)
 
+            # Evaluate
+
             pred = torch.cat(pred_list, dim=0)
             y = torch.cat(y_list, dim=0)
 
-            value = evaluate(pred, y, params=params)
-            train_values.append(value)
-            val_values.append(value)
+            train_mask, val_mask, test_mask = (
+                split["train"],
+                split["valid"],
+                split["test"],
+            )
+            train_value = evaluate(pred, y, train_mask, params)
+            val_value = evaluate(pred, y, val_mask, params)
+            test_value = evaluate(pred, y, test_mask, params)
 
-            if valid_as_test:
-                test_values.append(value)
+            return {
+                'train': train_value,
+                'val': val_value,
+                'test': test_value,
+                'metric': task2metric[params['task']]
+            }
 
-        # Test: few-shot
-        if not valid_as_test:
+        elif setting == "few_shot":
+            n_task = len(split["valid"]["support"])
+            train_values, val_values, test_values = [], [], []
+
+            # Validation: few-shot, zero-shot, in-context
+            for i in range(n_task):
+                s_mask = split["valid"]["support"][i]
+                q_mask = split["valid"]["query"][i]
+
+                # Define loaders for support and query sets
+                proto_loader = LinkNeighborLoader(
+                    dataset,
+                    num_neighbors=kwargs["num_neighbors"],
+                    edge_label_index=dataset.edge_index[:, s_mask],
+                    edge_label=labels[s_mask],
+                    batch_size=1024,
+                    num_workers=8,
+                )
+                query_loader = LinkNeighborLoader(
+                    dataset,
+                    num_neighbors=kwargs["num_neighbors"],
+                    edge_label_index=dataset.edge_index[:, q_mask],
+                    edge_label=labels[q_mask],
+                    batch_size=1024,
+                    num_workers=8,
+                )
+
+                # Construct prototypes based on support set
+
+                code_list, y_list = [], []
+                for batch in proto_loader:
+                    batch = batch.to(device)
+
+                    x = batch.node_text_feat
+                    edge_index = batch.edge_index
+                    edge_attr = batch.edge_text_feat[batch.xe]
+                    edge_label_index = batch.edge_label_index
+                    y = batch.edge_label
+
+                    z = model.encode(x, edge_index, edge_attr)
+                    edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
+
+                    if query_node_code_first:
+                        # Case 1: Use node code to form edge code
+                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
+                    else:
+                        # Case 2: Query edge code using edge embeddings directly
+                        edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
+
+                    code_list.append(edge_code.detach())
+                    y_list.append(y)
+                code = torch.cat(code_list, dim=0)
+                y = torch.cat(y_list, dim=0)
+
+                proto_emb = model.get_class_prototypes(code, y, num_classes)
+
+                # Compute logits
+
+                pred_list, y_list = [], []
+                for batch in query_loader:
+                    batch = batch.to(device)
+
+                    x = batch.node_text_feat
+                    edge_index = batch.edge_index
+                    edge_attr = batch.edge_text_feat[batch.xe]
+                    edge_label_index = batch.edge_label_index
+                    y = batch.edge_label
+
+                    z = model.encode(x, edge_index, edge_attr)
+                    edge_z = (z[edge_label_index[0]] + z[edge_label_index[1]]) / 2
+
+                    if query_node_code_first:
+                        # Case 1: Use node code to form edge code
+                        code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                        edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
+                    else:
+                        # Case 2: Query edge code using edge embeddings directly
+                        edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
+
+                    query_emb = edge_z if model.use_z_in_predict else edge_code
+
+                    pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
+                    pred_lin = model.get_lin_logits(edge_z).mean(1).softmax(dim=-1)
+                    pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
+
+                    pred_list.append(pred.detach())
+                    y_list.append(y)
+
+                pred = torch.cat(pred_list, dim=0)
+                y = torch.cat(y_list, dim=0)
+
+                value = evaluate(pred, y, params=params)
+                train_values.append(value)
+                val_values.append(value)
+
             for i in range(n_task):
                 s_mask = split["test"]["support"][i]
                 q_mask = split["test"]["query"][i]
@@ -618,11 +569,7 @@ def eval_link_batch(model, dataset, loader, split, labels, num_classes, params, 
                 code = torch.cat(code_list, dim=0)
                 y = torch.cat(y_list, dim=0)
 
-                if use_outer_proto_emb:
-                    proto_emb = dataset.class_node_text_feat
-                    proto_emb, _ = model.get_codes(proto_emb, use_orig_codes=True)
-                else:
-                    proto_emb = model.get_class_prototypes(code, y, num_classes)
+                proto_emb = model.get_class_prototypes(code, y, num_classes)
 
                 # Compute logits
 
@@ -662,9 +609,9 @@ def eval_link_batch(model, dataset, loader, split, labels, num_classes, params, 
                 value = evaluate(pred, y, params=params)
                 test_values.append(value)
 
-        return {
-            'train': np.mean(train_values),
-            'val': np.mean(val_values),
-            'test': np.mean(test_values),
-            'metric': task2metric[params['task']]
-        }
+            return {
+                'train': np.mean(train_values),
+                'val': np.mean(val_values),
+                'test': np.mean(test_values),
+                'metric': task2metric[params['task']]
+            }

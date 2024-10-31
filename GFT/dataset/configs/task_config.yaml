@@ -14,13 +14,13 @@ arxiv: &arxiv
   <<: *E2E-node
   dataset: arxiv
 
-cora_node: &cora_node
+cora: &cora
   <<: *E2E-node
-  dataset: cora_node
+  dataset: cora
 
-pubmed_node: &pubmed_node
+pubmed: &pubmed
   <<: *E2E-node
-  dataset: pubmed_node
+  dataset: pubmed
 
 wikics: &wikics
   <<: *E2E-node
@@ -48,10 +48,10 @@ logic_cora:
   eval_set_constructs:
     - stage: train
       split_name: train
-      dataset: cora_node
+      dataset: cora
     - stage: valid
       split_name: valid
-      dataset: cora_node
+      dataset: cora
     - stage: valid
       split_name: valid
       dataset: logic_cora
@@ -77,7 +77,7 @@ cora_link: &cora_link
       dataset: cora_link_eval
     - stage: valid
       split_name: valid
-      dataset: cora_node
+      dataset: cora
     - stage: test
       split_name: test
       dataset: cora_link_eval

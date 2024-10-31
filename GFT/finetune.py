@@ -20,10 +20,11 @@ from utils.early_stop import EarlyStopping
 from utils.logger import Logger
 from utils.args import get_args_finetune
 from utils.preprocess import pre_node, pre_link, pre_graph
-from utils.others import seed_everything, load_params, mask2idx, get_split, get_split_graph
+from utils.others import seed_everything, load_params, mask2idx
+from utils.splitter import get_split, get_split_graph
 
-from task.node import ft_node, eval_node, ft_node_batch, eval_node_batch
-from task.link import ft_link, eval_link, ft_link_batch, eval_link_batch
+from task.node import ft_node, eval_node
+from task.link import ft_link, eval_link
 from task.graph import ft_graph, eval_graph
 
 import warnings
@@ -56,12 +57,11 @@ def get_preprocess(params):
 
 def get_ft(params):
     task = params['task']
-    batch_size = params["batch_size"]
 
     if task == "node":
-        return ft_node if batch_size == 0 else ft_node_batch
+        return ft_node
     elif task == "link":
-        return ft_link if batch_size == 0 else ft_link_batch
+        return ft_link
     elif task == "graph":
         return ft_graph
     else:
@@ -73,27 +73,31 @@ def get_eval(params):
     batch_size = params["batch_size"]
 
     if task == "node":
-        return eval_node if batch_size == 0 else eval_node_batch
+        return eval_node
     elif task == "link":
-        return eval_link if batch_size == 0 else eval_link_batch
+        return eval_link
     elif task == "graph":
         return eval_graph
     else:
         raise ValueError("Invalid Task")
 
 
-
 def run(params):
     params["activation"] = nn.ReLU if params["activation"] == "relu" else nn.LeakyReLU
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+    preprocess = get_preprocess(params)
+    finetune = get_ft(params)
+    evaluate = get_eval(params)
 
     data_name = params["finetune_dataset"]
     task = params["task"]
     setting = params["setting"]
 
-    dataset, splits, labels, num_classes, num_tasks = get_finetune_graph(data_name)
+    dataset, splits, labels, num_classes, num_tasks = get_finetune_graph(params['data_path'], data_name)
     num_classes = num_tasks if task == "graph" else num_classes
-    preprocess = get_preprocess(params)
+    params["num_classes"] = num_classes
+
     dataset = preprocess(dataset)
     data = dataset[0]
     data.y = labels
@@ -102,9 +106,6 @@ def run(params):
         pass
     elif isinstance(splits, dict):
         splits = [splits] * params["repeat"]
-
-    finetune = get_ft(params)
-    evaluate = get_eval(params)
 
     encoder = Encoder(
         input_dim=params["input_dim"],
@@ -195,30 +196,27 @@ def run(params):
                 model=task_model,
                 dataset=data if task in ["node", "link"] else dataset,
                 loader=train_loader,
+                optimizer=task_opt,
                 split=split,
                 labels=labels,
-                num_classes=num_classes,
                 params=params,
-                optimizer=task_opt,
                 num_neighbors=[30] * params["num_layers"],
-                setting=setting,
-                query_node_code_first=params["query_node_code_first"],
             )
 
             result = evaluate(
                 model=task_model,
                 dataset=data if task in ["node", "link"] else dataset,
-                loader=subgraph_loader,
+                loader=subgraph_loader if task in ["node", "link"] else [train_loader, val_loader, test_loader],
                 split=split,
                 labels=labels,
-                num_classes=num_classes,
+                # num_classes=num_classes,
                 params=params,
                 num_neighbors=[-1] * params["num_layers"],
-                train_loader=train_loader,
-                val_loader=val_loader,
-                test_loader=test_loader,
-                setting=setting,
-                query_node_code_first=params["query_node_code_first"],
+                # train_loader=train_loader,
+                # val_loader=val_loader,
+                # test_loader=test_loader,
+                # setting=setting,
+                # query_node_code_first=params["query_node_code_first"],
             )
 
             is_stop = stopper(result)
@@ -267,7 +265,7 @@ def run(params):
 if __name__ == "__main__":
     params = get_args_finetune()
 
-    params['data_path'] = ''
+    params['data_path'] = 'data/'
     params['pt_model_path'] = "ckpts/pretrain_model/"
     params['ablation_model_path'] = "ckpts/ablation_model/"
     params['ft_model_path'] = "ckpts/finetune_model/"
@@ -281,8 +279,6 @@ if __name__ == "__main__":
             default_params = yaml.safe_load(f)
             params.update(default_params[task][dataset])
 
-    tags = [params['setting']]
-
     if params["setting"] in ["few_shot"]:
         if params['finetune_dataset'] in ['FB15K237']:
             params['batch_size'] = 0
@@ -290,21 +286,12 @@ if __name__ == "__main__":
             params['n_way'] = 2
             params['num_instances_per_class'] = params['n_train']
 
-    if params['ablation_trade_off'] != -1:
-        params['trade_off'] = params['ablation_trade_off']
-
-    if params['ablation_lambda_proto'] != -1:
-        params['lambda_proto'] = params['ablation_lambda_proto']
-
-    if params['ablation_lambda_act'] != -1:
-        params['lambda_act'] = params['ablation_lambda_act']
-
     wandb.init(
         project="GFT-Finetune",
         name="{} - Pretrain Epoch {}".format(str.upper(params["finetune_dataset"]), params["pretrain_model_epoch"]),
         config=params,
         mode="disabled" if params["debug"] else "online",  # sweep only works in online mode
-        tags=tags,
+        tags=[params['setting']],
     )
     params = dict(wandb.config)
     print(params)

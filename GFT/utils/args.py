@@ -28,7 +28,6 @@ def get_args_pretrain():
 
     # Pretrain Dataset
     parser.add_argument('--pretrain_dataset', '--pt_data', type=str, default="all")
-    parser.add_argument('--weight_setting', '--pt_weight', type=str, default="all")
     parser.add_argument('--pretrain_epochs', '--pt_epochs', '--epochs', type=int, default=50)
     parser.add_argument('--pretrain_lr', '--pt_lr', type=float, default=1e-4)
     parser.add_argument('--pretrain_weight_decay', '--pt_decay', '--decay', type=float, default=1e-5)
@@ -104,11 +103,6 @@ def get_args_finetune():
     parser.add_argument("--lambda_act", type=float, default=1)
     parser.add_argument("--trade_off", type=float, default=0.5)
     parser.add_argument("--num_instances_per_class", type=int, default=20)
-
-    # Ablation
-    parser.add_argument('--ablation_trade_off', type=float, default=-1, help='Trade off for ablation study')
-    parser.add_argument('--ablation_lambda_proto', type=float, default=-1, help='Lambda proto for ablation')
-    parser.add_argument('--ablation_lambda_act', type=float, default=-1, help='Lambda act for ablation')
 
     args = parser.parse_args()
     return vars(args)

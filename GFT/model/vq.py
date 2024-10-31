@@ -1,3 +1,5 @@
+# The code is adapted from repo: https://github.com/lucidrains/vector-quantize-pytorch
+
 from functools import partial
 
 import torch

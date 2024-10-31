@@ -1,5 +1,5 @@
 from torch_geometric.loader import NeighborLoader, LinkNeighborLoader, DataLoader
-from utils.others import seed_everything, load_params, mask2idx, get_split, get_split_graph
+from utils.others import seed_everything, load_params, mask2idx
 
 
 def get_loader(data, split, labels, params):

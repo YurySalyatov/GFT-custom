@@ -17,8 +17,6 @@ from fs_datamanager import SimpleFSManager
 from gp.utils.utils import k_fold_ind, k_fold2_split
 from gp.lightning.data_template import DataWithMeta
 
-# TODO: Instead of using global() to access these functions, come up with something more elegant
-
 name2dataset = {"arxiv": SingleGraphOFADataset, "Cora": SingleGraphOFADataset, "Pubmed": SingleGraphOFADataset,
                 "WN18RR": KGOFADataset, "FB15K237": KGOFADataset, "wikics": SingleGraphOFADataset,
                 "chemblpre": MolOFADataset, "chempcba": MolOFADataset, "chemhiv": MolOFADataset, }
