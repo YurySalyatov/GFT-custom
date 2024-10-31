@@ -1,4 +1,4 @@
 /cache_data/
-/ckpts/
+/ckpts/*
 /wandb/
-/data/
+/data/*
