@@ -18,8 +18,14 @@ The official implementation of GFT, a cross-domain cross-task foundation model o
 
 Authored by [Zehong Wang](https://zehong-wang.github.io/), [Zheyuan Zhang](https://jasonzhangzy1757.github.io/), [Nitesh V Chawla](https://niteshchawla.nd.edu/), [Chuxu Zhang](https://chuxuzhang.github.io/), and [Yanfang Ye](http://yes-lab.org/). 
 
+## TODO
 
-
+1. Correct the few-shot learning on KGs. 
+2. Add and test the model with single classifier `--no_lin_clf` and `--no_proto_clf`. (Test node, add on link and graph)
+3. Run experiments with different seeds, report the values. 
+4. Release the checkpoints
+5. A better data interface
+  
 ## Overview
 
 <img src="assets/framework.png">
@@ -49,7 +55,7 @@ conda activate GFT
 
 We use datasets provided by [OFA](https://github.com/LechengKong/OneForAll). You can run the `pretrain.py` to automatically download the datasets, which will be downloaded to `/data` folder by default. The pipeline will automatically preprocess the datasets by converting textual descriptions to textual embeddings. 
 
-Alternatively, you can download our [preprocessed datasets]() and unzip on the `/data` folder. 
+Alternatively, you can download our [preprocessed datasets](https://drive.google.com/file/d/18IvieNPWm0ZavSsHvxujXSGFP1tuxRAH/view?usp=sharing) and unzip on the `/data` folder. 
 
 **TODO:** We plan to provide an interface to decompose the data preprocessing and model training, and bring your own dataset. 
 
@@ -93,6 +99,20 @@ python GFT/finetune.py --use_params --dataset cora
 python GFT/finetune.py --use_params --dataset cora --setting few_shot
 ```
 For finetuning, we provide eight datasets, including `cora`, `pubmed`, `wikics`, `arxiv`, `WN18RR`, `FB15K237`, `chemhiv`, and `chempcba`. 
+
+Alternatively, you can run the script to reproduce the experiments. 
+
+```
+# Pretraining with default hyper-parameters
+sh script/pretrain.sh
+
+# Finetuning on all datasets with default hyper-parameters
+sh script/finetune.sh
+
+# Few-shot learning on all datasets with default hyper-parameters
+sh script/few_shot.sh
+```
+
 
 Note: the pretrained model will be stored in `ckpts/pretrain_model/` by default. 
 
@@ -307,6 +327,10 @@ The hyper-parameters dedicated for few-shot learning are
 
 **TODO:** We will release the pretrained model in the future. 
 
+## Reproducibility
+
+**TODO:** The experimental results may vary due to the randomized initialization during pretraining. We provide the experimental results using different random seeds (i.e., 1-5) in pretraining to show the potential impact of random initialization. 
+
 ## Contact Us
 
 Please contact `zwang43@nd.edu` or open an issue if you have questions.
@@ -328,4 +352,4 @@ If you find the repo is useful for your research, please cite the original paper
 
 ## Acknowledgement
 
-This repository is based on the codebase of [OFA](https://github.com/LechengKong/OneForAll), [PyG](https://github.com/pyg-team/pytorch_geometric), [VQ](https://github.com/lucidrains/vector-quantize-pytorch). Thanks for their sharing! 
+This repository is based on the codebase of [OFA](https://github.com/LechengKong/OneForAll), [PyG](https://github.com/pyg-team/pytorch_geometric), [OGB](https://github.com/snap-stanford/ogb), and [VQ](https://github.com/lucidrains/vector-quantize-pytorch). Thanks for their sharing! 
