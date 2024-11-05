@@ -1,5 +1,6 @@
 import argparse
 import os
+import os.path as osp
 
 os.sys.path.append(os.path.dirname(__file__))
 
@@ -36,19 +37,14 @@ from task_constructor import UnifiedTaskConstructor
 
 print(os.path.dirname(__file__))
 
-WEIGHT = load_yaml('config/pt_data.yaml')
+WEIGHT = load_yaml(os.path.join(os.path.dirname(__file__), '..', '..', "config", "pt_data.yaml"))
 datasets = {k: v.keys() for k, v in WEIGHT.items()}
-print(datasets)
 
 params = load_yaml(os.path.join(os.path.dirname(__file__), "processed_params.yaml"))
 params = SimpleNamespace(**params)
 
-task_config_lookup = load_yaml(
-    os.path.join(os.path.dirname(__file__), "configs", "task_config.yaml")
-)
-data_config_lookup = load_yaml(
-    os.path.join(os.path.dirname(__file__), "configs", "data_config.yaml")
-)
+task_config_lookup = load_yaml(os.path.join(os.path.dirname(__file__), "configs", "task_config.yaml"))
+data_config_lookup = load_yaml(os.path.join(os.path.dirname(__file__), "configs", "data_config.yaml"))
 
 
 # These functions are for pre-training
@@ -223,7 +219,7 @@ def get_node_data(tasks, dataset_name):
 
     num_tasks = 1
 
-    if dataset_name in ["cora_node", "pubmed_node"]:
+    if dataset_name in ["cora", "pubmed"]:
         split = {"train": data.train_masks, "valid": data.val_masks, "test": data.test_masks}
         split = preprocess_split(split)
         labels = data.y
@@ -299,12 +295,9 @@ def get_graph_clf_graph(tasks, dataset_name):
 # chemblpre: only used for pre-training
 
 def get_finetune_graph(data_path, dataset_name):
-    dataset_name = "cora_node" if dataset_name == "cora" else dataset_name
-    dataset_name = "pubmed_node" if dataset_name == "pubmed" else dataset_name
-
     tasks = get_task_constructor(data_path)
 
-    if dataset_name in ["cora_node", "pubmed_node", "wikics", "arxiv"]:
+    if dataset_name in ["cora", "pubmed", "wikics", "arxiv"]:
         return get_node_data(tasks, dataset_name)
     elif dataset_name in ["WN18RR", "FB15K237"]:
         return get_link_data(tasks, dataset_name)

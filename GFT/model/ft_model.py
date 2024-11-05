@@ -124,7 +124,6 @@ class TaskModel(nn.Module):
         self.use_z_in_predict = params["use_z_in_predict"]
         self.use_cosine_sim = params["use_cosine_sim"]
         self.lambda_proto = params["lambda_proto"]
-        self.lambda_proto_reg = params["lambda_proto_reg"]
         self.lambda_act = params["lambda_act"]
         self.trade_off = params["trade_off"]
         self.num_instances_per_class = params["num_instances_per_class"]

@@ -7,6 +7,7 @@ def get_args_pretrain():
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--use_params", action="store_true")
+    parser.add_argument('--gpu', type=int, default=0)
 
     # Encoder Parameters
     parser.add_argument('--input_dim', type=int, default=768)
@@ -54,6 +55,7 @@ def get_args_finetune():
     parser.add_argument("--use_params", action="store_true")
     parser.add_argument("--setting", type=str, default="standard")
     parser.add_argument('--save', action='store_true')
+    parser.add_argument('--gpu', type=int, default=0)
 
     # Few-shot Parameters
     parser.add_argument("--n_task", type=int, default=20)
@@ -66,6 +68,7 @@ def get_args_finetune():
     parser.add_argument("--pretrain_dataset", '--pt_data', type=str, default="all")
     parser.add_argument('--pretrain_task', '--pt_task', type=str, default='all')
     parser.add_argument("--pretrain_model_epoch", '--pt_epochs', type=int, default=25)
+    parser.add_argument('--pretrain_seed', '--pt_seed', type=int, default=42)
 
     # Encoder Parameters
     parser.add_argument("--input_dim", type=int, default=768)
@@ -99,10 +102,12 @@ def get_args_finetune():
     parser.add_argument("--use_z_in_predict", type=bool, default=True)
     parser.add_argument("--use_cosine_sim", type=bool, default=True)
     parser.add_argument("--lambda_proto", type=float, default=1)
-    parser.add_argument("--lambda_proto_reg", type=float, default=0)
+    # parser.add_argument("--lambda_proto_reg", type=float, default=0)
     parser.add_argument("--lambda_act", type=float, default=1)
     parser.add_argument("--trade_off", type=float, default=0.5)
     parser.add_argument("--num_instances_per_class", type=int, default=20)
+    parser.add_argument('--no_lin_clf', action='store_true')
+    parser.add_argument('--no_proto_clf', action='store_true')
 
     args = parser.parse_args()
     return vars(args)

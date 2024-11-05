@@ -32,7 +32,7 @@ import wandb
 
 warnings.filterwarnings("ignore")
 
-DATASET2TASK = {
+dataset2task = {
     "cora": "node",
     "pubmed": "node",
     "arxiv": "node",
@@ -70,7 +70,6 @@ def get_ft(params):
 
 def get_eval(params):
     task = params['task']
-    batch_size = params["batch_size"]
 
     if task == "node":
         return eval_node
@@ -84,7 +83,8 @@ def get_eval(params):
 
 def run(params):
     params["activation"] = nn.ReLU if params["activation"] == "relu" else nn.LeakyReLU
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device(f"cuda:{params['gpu']}") if torch.cuda.is_available() else torch.device("cpu")
+    params['activation'] = nn.ReLU if params['activation'] == 'relu' else nn.LeakyReLU
 
     preprocess = get_preprocess(params)
     finetune = get_ft(params)
@@ -138,8 +138,8 @@ def run(params):
         pretrain_task = params['pretrain_task']
 
         if pretrain_task == 'all':
-            path = osp.join(params['pt_model_path'], "codebook_size_{}_layer_{}_pretrain_on_{}".format(
-                params["codebook_size"], params["num_layers"], params["pretrain_dataset"]
+            path = osp.join(params['pt_model_path'], "codebook_size_{}_layer_{}_pretrain_on_{}_seed_{}".format(
+                params["codebook_size"], params["num_layers"], params["pretrain_dataset"], params['pretrain_seed']
             ))
         elif pretrain_task in ['feat_only', 'topo_only', 'sem_only', 'no_codebook', 'no_aug', 'no_ortho_reg']:
             path = osp.join(params['ablation_model_path'], "{}".format(pretrain_task))
@@ -209,14 +209,8 @@ def run(params):
                 loader=subgraph_loader if task in ["node", "link"] else [train_loader, val_loader, test_loader],
                 split=split,
                 labels=labels,
-                # num_classes=num_classes,
                 params=params,
                 num_neighbors=[-1] * params["num_layers"],
-                # train_loader=train_loader,
-                # val_loader=val_loader,
-                # test_loader=test_loader,
-                # setting=setting,
-                # query_node_code_first=params["query_node_code_first"],
             )
 
             is_stop = stopper(result)
@@ -228,8 +222,7 @@ def run(params):
             wandb.log(
                 {
                     "train/proto_loss": loss['proto_loss'],
-                    "train/proto_reg": loss['proto_reg'],
-                    "train/act_loss": loss['act_loss'],
+                    "train/lin_loss": loss['act_loss'],
                     "train/loss": loss['loss'],
                     "train/train_acc": result['train'],
                     "train/val_acc": result['val'],
@@ -265,17 +258,22 @@ def run(params):
 if __name__ == "__main__":
     params = get_args_finetune()
 
-    params['data_path'] = 'data/'
-    params['pt_model_path'] = "ckpts/pretrain_model/"
-    params['ablation_model_path'] = "ckpts/ablation_model/"
-    params['ft_model_path'] = "ckpts/finetune_model/"
+    params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
+    params['pt_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
+    params['ablation_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'ablation_model')
+    params['ft_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'finetune_model')
+
+    # params['data_path'] = '/scratch365/zwang43/GFM/data'
+    # params['pt_model_path'] = '/scratch365/zwang43/GFM/ckpts/pretrain_model'
+    # params['ablation_model_path'] = '/scratch365/zwang43/GFM/ckpts/ablation_model'
+    # params['ft_model_path'] = '/scratch365/zwang43/GFM/ckpts/finetune_model'
 
     dataset = params["finetune_dataset"]
-    task = DATASET2TASK[dataset]
+    task = dataset2task[dataset]
     params['task'] = task
 
     if params["use_params"]:
-        with open("config/finetune.yaml", "r") as f:
+        with open(osp.join(osp.dirname(__file__), '..', 'config', 'finetune.yaml'), 'r') as f:
             default_params = yaml.safe_load(f)
             params.update(default_params[task][dataset])
 
@@ -286,8 +284,15 @@ if __name__ == "__main__":
             params['n_way'] = 2
             params['num_instances_per_class'] = params['n_train']
 
+    # At least use a classifier
+    assert not (params['no_lin_clf'] and params['no_proto_clf'])
+    if params['no_lin_clf']:
+        params['trade_off'] = 0
+    if params['no_proto_clf']:
+        params['trade_off'] = 1
+
     wandb.init(
-        project="GFT-Finetune",
+        project="GFT-Finetune-Test",
         name="{} - Pretrain Epoch {}".format(str.upper(params["finetune_dataset"]), params["pretrain_model_epoch"]),
         config=params,
         mode="disabled" if params["debug"] else "online",  # sweep only works in online mode

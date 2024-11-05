@@ -41,8 +41,8 @@ def eval_auc(y_pred, y_true):
             is_valid = y_true[:, i] == y_true[:, i]
             roc_list.append(roc_auc_score(y_true[is_valid, i], y_pred[is_valid, i]))
 
-    if len(roc_list) < y_true.shape[1]:
-        print("Some target is missing!")
-        print("Missing ratio: %f" % (1 - float(len(roc_list)) / y_true.shape[1]))
+    # if len(roc_list) < y_true.shape[1]:
+    #     print("Some target is missing!")
+    #     print("Missing ratio: %f" % (1 - float(len(roc_list)) / y_true.shape[1]))
 
     return sum(roc_list) / len(roc_list)  # y_true.shape[1]

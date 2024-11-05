@@ -77,7 +77,7 @@ def pretrain(model, loader, optimizer, params, scheduler=None, no_codebook=False
 
 def run(params):
     seed_everything(params["seed"])
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    device = torch.device(f"cuda:{params['gpu']}") if torch.cuda.is_available() else torch.device("cpu")
     params['activation'] = nn.ReLU if params['activation'] == 'relu' else nn.LeakyReLU
 
     # Data
@@ -146,8 +146,8 @@ def run(params):
 
         # Save the model
         save_path = params['model_path']
-        save_path = osp.join(save_path, 'codebook_size_{}_layer_{}_pretrain_on_{}'.format(
-            params["codebook_size"], params["num_layers"], params["pretrain_dataset"]))
+        save_path = osp.join(save_path, 'codebook_size_{}_layer_{}_pretrain_on_{}_seed_{}'.format(
+            params["codebook_size"], params["num_layers"], params["pretrain_dataset"], params['seed']))
         check_path(save_path)
 
         try:
@@ -163,11 +163,14 @@ def run(params):
 if __name__ == "__main__":
     params = get_args_pretrain()
 
-    params['data_path'] = 'data/'
-    params['model_path'] = 'ckpts/pretrain_model/'
+    # params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
+    # params['model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
+
+    params['data_path'] = '/scratch365/zwang43/GFM/data'
+    params['model_path'] = '/scratch365/zwang43/GFM/ckpts/pretrain_model'
 
     if params['use_params']:
-        with open(f'config/pretrain.yaml', 'r') as f:
+        with open(osp.join(osp.dirname(__file__), '..', 'config', 'pretrain.yaml'), 'r') as f:
             default_params = yaml.safe_load(f)
             params.update(default_params)
 

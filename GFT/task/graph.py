@@ -14,47 +14,52 @@ def ft_graph(model, dataset, loader, optimizer, split, labels, params, scheduler
     setting = params["setting"]
     num_classes = params["num_classes"]
 
+    use_proto_clf = not params['no_proto_clf']
+    use_lin_clf = not params['no_lin_clf']
+    proto_loss = torch.tensor(0.0).to(device)
+    act_loss = torch.tensor(0.0).to(device)
+
     # For few-shot graph-level task, the num_instances_per_class is n_train
     num_instances_per_class = params['num_instances_per_class']
 
-    # Define prototype loader
+    if use_proto_clf:
+        # Define prototype loader
 
-    # Sample Prototypes from each task to form the prototype set
-    if setting in ['standard', 'few_shot']:
-        # Standard setting contains too much instances
-        # Thus we need to do sampling.
+        # Sample Prototypes from each task to form the prototype set
+        if setting in ['standard', 'few_shot']:
+            # Standard setting contains too much instances
+            # Thus we need to do sampling.
 
-        # proto_idx and proto_labels are dictionaries
-        proto_idx, proto_labels = sample_proto_instances_for_graph(
-            labels, split['train'], num_instances_per_class=num_instances_per_class)
-        flat_proto_idx = [item for sublist in proto_idx.values() for item in sublist]
-        proto_dataset = dataset[flat_proto_idx]
-        proto_loader = DataLoader(proto_dataset, batch_size=1024, num_workers=8)
-    else:
-        raise NotImplementedError("The setting is not supported for sampling prototype instances.")
+            # proto_idx and proto_labels are dictionaries
+            proto_idx, proto_labels = sample_proto_instances_for_graph(
+                labels, split['train'], num_instances_per_class=num_instances_per_class)
+            flat_proto_idx = [item for sublist in proto_idx.values() for item in sublist]
+            proto_dataset = dataset[flat_proto_idx]
+            proto_loader = DataLoader(proto_dataset, batch_size=1024, num_workers=8)
+        else:
+            raise NotImplementedError("The setting is not supported for sampling prototype instances.")
 
-    # Encode prototypes
-    code_list = []
-    for batch in proto_loader:
-        batch = batch.to(device)
+        # Encode prototypes
+        code_list = []
+        for batch in proto_loader:
+            batch = batch.to(device)
 
-        x = batch.node_text_feat
-        edge_index = batch.edge_index
-        edge_attr = batch.edge_text_feat
+            x = batch.node_text_feat
+            edge_index = batch.edge_index
+            edge_attr = batch.edge_text_feat
 
-        # Use graph embedding to query code
+            # Use graph embedding to query code
 
-        z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-        code, _ = model.get_codes(z, use_orig_codes=True)
-        code_list.append(code.detach())
+            z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
+            code, _ = model.get_codes(z, use_orig_codes=True)
+            code_list.append(code.detach())
 
-    code = torch.cat(code_list, dim=0)
-    proto_emb = model.get_class_prototypes(code, proto_labels, num_classes)
+        code = torch.cat(code_list, dim=0)
+        proto_emb = model.get_class_prototypes(code, proto_labels, num_classes)
 
     # Train
 
     total_proto_loss = 0
-    total_proto_reg = 0
     total_act_loss = 0
     total_loss = 0
 
@@ -67,14 +72,16 @@ def ft_graph(model, dataset, loader, optimizer, split, labels, params, scheduler
         y = batch.y.to(torch.float64)
 
         z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-        code, commit_loss = model.get_codes(z, use_orig_codes=True)
-        query_emb = z if params['use_z_in_predict'] else code
 
-        # Compute Losses
-        proto_loss = model.compute_proto_loss(query_emb, proto_emb, y, task="multi") * params["lambda_proto"]
-        proto_reg = model.compute_proto_reg(proto_emb) * params["lambda_proto_reg"]
-        act_loss = model.compute_activation_loss(z, y, task="multi") * params["lambda_act"]
-        loss = proto_loss + proto_reg + act_loss
+        if use_proto_clf:
+            code, commit_loss = model.get_codes(z, use_orig_codes=True)
+            query_emb = z if params['use_z_in_predict'] else code
+            proto_loss = model.compute_proto_loss(query_emb, proto_emb, y, task="multi") * params["lambda_proto"]
+
+        if use_lin_clf:
+            act_loss = model.compute_activation_loss(z, y, task="multi") * params["lambda_act"]
+
+        loss = proto_loss + act_loss
 
         optimizer.zero_grad()
         loss.backward()
@@ -82,14 +89,12 @@ def ft_graph(model, dataset, loader, optimizer, split, labels, params, scheduler
         if scheduler:
             scheduler.step()
 
-        total_proto_loss += model.lambda_proto * proto_loss.item()
-        total_proto_reg += model.lambda_proto_reg * proto_reg.item()
-        total_act_loss += model.lambda_act * act_loss.item()
+        total_proto_loss += proto_loss.item()
+        total_act_loss += act_loss.item()
         total_loss += loss.item()
 
     return {
         'proto_loss': total_proto_loss / len(loader),
-        'proto_reg': total_proto_reg / len(loader),
         'act_loss': total_act_loss / len(loader),
         'loss': total_loss / len(loader),
     }
@@ -127,33 +132,38 @@ def eval_graph(model, dataset, loader, split, labels, params, **kwargs):
 def eval_graph_single(model, dataset, loader, split, labels, params, **kwargs):
     model.eval()
     device = get_device_from_model(model)
-    setting = kwargs["setting"]
     num_classes = params["num_classes"]
 
-    # Standard setting contains too much instances
-    # Thus we need to do sampling.
+    use_proto_clf = not params['no_proto_clf']
+    use_lin_clf = not params['no_lin_clf']
+    pred_proto = 0
+    pred_lin = 0
 
-    # proto_idx and proto_labels are dictionaries
-    proto_idx, proto_labels = sample_proto_instances_for_graph(labels, split['train'],
-                                                               num_instances_per_class=model.num_instances_per_class)
-    flat_proto_idx = [item for sublist in proto_idx.values() for item in sublist]
-    proto_dataset = dataset[flat_proto_idx]
-    proto_loader = DataLoader(proto_dataset, batch_size=1024, num_workers=8)
+    if use_proto_clf:
+        # Standard setting contains too much instances
+        # Thus we need to do sampling.
 
-    code_list = []
-    for batch in proto_loader:
-        batch = batch.to(device)
+        # proto_idx and proto_labels are dictionaries
+        proto_idx, proto_labels = sample_proto_instances_for_graph(labels, split['train'],
+                                                                   num_instances_per_class=model.num_instances_per_class)
+        flat_proto_idx = [item for sublist in proto_idx.values() for item in sublist]
+        proto_dataset = dataset[flat_proto_idx]
+        proto_loader = DataLoader(proto_dataset, batch_size=1024, num_workers=8)
 
-        x = batch.node_text_feat
-        edge_index = batch.edge_index
-        edge_attr = batch.edge_text_feat
+        code_list = []
+        for batch in proto_loader:
+            batch = batch.to(device)
 
-        z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-        code, _ = model.get_codes(z, use_orig_codes=True)
-        code_list.append(code.detach())
+            x = batch.node_text_feat
+            edge_index = batch.edge_index
+            edge_attr = batch.edge_text_feat
 
-    code = torch.cat(code_list, dim=0)
-    proto_emb = model.get_class_prototypes(code, proto_labels, num_classes)
+            z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
+            code, _ = model.get_codes(z, use_orig_codes=True)
+            code_list.append(code.detach())
+
+        code = torch.cat(code_list, dim=0)
+        proto_emb = model.get_class_prototypes(code, proto_labels, num_classes)
 
     y_list, pred_list = [], []
     for step, batch in enumerate(loader):
@@ -164,11 +174,13 @@ def eval_graph_single(model, dataset, loader, split, labels, params, **kwargs):
         edge_attr = batch.edge_text_feat
 
         z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-        code, commit_loss = model.get_codes(z, use_orig_codes=True)
-        query_emb = z if model.use_z_in_predict else code
 
-        pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
-        pred_lin = model.get_lin_logits(z).mean(1)
+        if use_proto_clf:
+            code, commit_loss = model.get_codes(z, use_orig_codes=True)
+            query_emb = z if model.use_z_in_predict else code
+            pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
+        if use_lin_clf:
+            pred_lin = model.get_lin_logits(z).mean(1)
         pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
 
         y_list.append(batch.y.view(pred.shape))
@@ -176,9 +188,7 @@ def eval_graph_single(model, dataset, loader, split, labels, params, **kwargs):
 
     # Evaluate
     y = torch.cat(y_list, dim=0)
-    # y[y == 0] = -1
     pred = torch.cat(pred_list, dim=0)
-    # value = evaluate_graph(pred, y)
     value = evaluate(pred, y, params=params)
 
     return value
@@ -192,8 +202,11 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
 
     assert setting in ["few_shot"]
 
-    # valid_as_test = setting in ["zero_shot", "in_context"]
-    # use_outer_proto_emb = setting in ["zero_shot"]
+    use_proto_clf = not params['no_proto_clf']
+    use_lin_clf = not params['no_lin_clf']
+    pred_proto = 0
+    pred_lin = 0
+
     n_task = len(split['test']['support']['idx'])
     train_values, val_values, test_values = [], [], []
 
@@ -202,29 +215,30 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
         s_idx, s_label = split['valid']['support']['idx'][i], split['valid']['support']['label'][i]
         q_idx, q_label = split['valid']['query']['idx'][i], split['valid']['query']['label'][i]
 
-        # Get prototypes
-        flat_s_idx = [item for sublist in s_idx.values() for item in sublist]
-        proto_dataset = dataset[flat_s_idx]
-        proto_loader = DataLoader(
-            proto_dataset,
-            batch_size=1024,
-            num_workers=8,
-        )
+        if use_proto_clf:
+            # Get prototypes
+            flat_s_idx = [item for sublist in s_idx.values() for item in sublist]
+            proto_dataset = dataset[flat_s_idx]
+            proto_loader = DataLoader(
+                proto_dataset,
+                batch_size=1024,
+                num_workers=8,
+            )
 
-        code_list = []
-        for batch in proto_loader:
-            batch = batch.to(device)
+            code_list = []
+            for batch in proto_loader:
+                batch = batch.to(device)
 
-            x = batch.node_text_feat
-            edge_index = batch.edge_index
-            edge_attr = batch.edge_text_feat
+                x = batch.node_text_feat
+                edge_index = batch.edge_index
+                edge_attr = batch.edge_text_feat
 
-            z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-            code, _ = model.get_codes(z, use_orig_codes=True)
-            code_list.append(code.detach())
+                z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
+                code, _ = model.get_codes(z, use_orig_codes=True)
+                code_list.append(code.detach())
 
-        code = torch.cat(code_list, dim=0)
-        proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
+            code = torch.cat(code_list, dim=0)
+            proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
 
         # Prediction
 
@@ -245,11 +259,12 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
             edge_attr = batch.edge_text_feat
 
             z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-            code, commit_loss = model.get_codes(z, use_orig_codes=True)
-            query_emb = z if model.use_z_in_predict else code
-
-            pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
-            pred_lin = model.get_lin_logits(z).mean(1)
+            if use_proto_clf:
+                code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                query_emb = z if model.use_z_in_predict else code
+                pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
+            if use_lin_clf:
+                pred_lin = model.get_lin_logits(z).mean(1)
             pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
 
             y_list.append(batch.y.view(pred.shape))
@@ -262,37 +277,36 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
 
         train_values.append(value)
         val_values.append(value)
-        # if valid_as_test:
-        #     test_values.append(value)
 
     for i in range(n_task):
         s_idx, s_label = split['test']['support']['idx'][i], split['test']['support']['label'][i]
         q_idx, q_label = split['test']['query']['idx'][i], split['test']['query']['label'][i]
 
-        # Get prototypes
+        if use_proto_clf:
+            # Get prototypes
 
-        flat_s_idx = [item for sublist in s_idx.values() for item in sublist]
-        proto_dataset = dataset[flat_s_idx]
-        proto_loader = DataLoader(
-            proto_dataset,
-            batch_size=1024,
-            num_workers=8,
-        )
+            flat_s_idx = [item for sublist in s_idx.values() for item in sublist]
+            proto_dataset = dataset[flat_s_idx]
+            proto_loader = DataLoader(
+                proto_dataset,
+                batch_size=1024,
+                num_workers=8,
+            )
 
-        code_list = []
-        for batch in proto_loader:
-            batch = batch.to(device)
+            code_list = []
+            for batch in proto_loader:
+                batch = batch.to(device)
 
-            x = batch.node_text_feat
-            edge_index = batch.edge_index
-            edge_attr = batch.edge_text_feat
+                x = batch.node_text_feat
+                edge_index = batch.edge_index
+                edge_attr = batch.edge_text_feat
 
-            z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-            code, _ = model.get_codes(z, use_orig_codes=True)
-            code_list.append(code.detach())
+                z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
+                code, _ = model.get_codes(z, use_orig_codes=True)
+                code_list.append(code.detach())
 
-        code = torch.cat(code_list, dim=0)
-        proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
+            code = torch.cat(code_list, dim=0)
+            proto_emb = model.get_class_prototypes(code, s_label, num_classes).detach()
 
         # Prediction
 
@@ -313,11 +327,13 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
             edge_attr = batch.edge_text_feat
 
             z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-            code, commit_loss = model.get_codes(z, use_orig_codes=True)
-            query_emb = z if model.use_z_in_predict else code
 
-            pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
-            pred_lin = model.get_lin_logits(z).mean(1)
+            if use_proto_clf:
+                code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                query_emb = z if model.use_z_in_predict else code
+                pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
+            if use_lin_clf:
+                pred_lin = model.get_lin_logits(z).mean(1)
             pred = (1 - model.trade_off) * pred_proto + model.trade_off * pred_lin
 
             y_list.append(batch.y.view(pred.shape))
