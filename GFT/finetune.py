@@ -224,9 +224,9 @@ def run(params):
                     "train/proto_loss": loss['proto_loss'],
                     "train/lin_loss": loss['act_loss'],
                     "train/loss": loss['loss'],
-                    "train/train_acc": result['train'],
-                    "train/val_acc": result['val'],
-                    "train/test_acc": result['test'],
+                    "train/train_value": result['train'],
+                    "train/val_value": result['val'],
+                    "train/test_value": result['test'],
                 }
             )
 
@@ -258,15 +258,15 @@ def run(params):
 if __name__ == "__main__":
     params = get_args_finetune()
 
-    params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
-    params['pt_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
-    params['ablation_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'ablation_model')
-    params['ft_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'finetune_model')
+    # params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
+    # params['pt_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
+    # params['ablation_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'ablation_model')
+    # params['ft_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'finetune_model')
 
-    # params['data_path'] = '/scratch365/zwang43/GFM/data'
-    # params['pt_model_path'] = '/scratch365/zwang43/GFM/ckpts/pretrain_model'
-    # params['ablation_model_path'] = '/scratch365/zwang43/GFM/ckpts/ablation_model'
-    # params['ft_model_path'] = '/scratch365/zwang43/GFM/ckpts/finetune_model'
+    params['data_path'] = '/scratch365/zwang43/GFM/data'
+    params['pt_model_path'] = '/scratch365/zwang43/GFM/ckpts/pretrain_model'
+    params['ablation_model_path'] = '/scratch365/zwang43/GFM/ckpts/ablation_model'
+    params['ft_model_path'] = '/scratch365/zwang43/GFM/ckpts/finetune_model'
 
     dataset = params["finetune_dataset"]
     task = dataset2task[dataset]
@@ -292,7 +292,7 @@ if __name__ == "__main__":
         params['trade_off'] = 1
 
     wandb.init(
-        project="GFT-Finetune-Test",
+        project="GFT-Finetune",
         name="{} - Pretrain Epoch {}".format(str.upper(params["finetune_dataset"]), params["pretrain_model_epoch"]),
         config=params,
         mode="disabled" if params["debug"] else "online",  # sweep only works in online mode

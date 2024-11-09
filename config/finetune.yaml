@@ -7,10 +7,10 @@ node:
     batch_size: 0
     finetune_lr: 0.0005
     lambda_proto: 1
-    lambda_proto_reg: 0
     lambda_act: 0.1
     trade_off: 0.1
     num_instances_per_class: 0
+    n_train: 1
   pubmed:
     finetune_dataset: pubmed
     normalize: none
@@ -19,7 +19,6 @@ node:
     batch_size: 0
     finetune_lr: 0.005
     lambda_proto: 0.1
-    lambda_proto_reg: 0
     lambda_act: 1
     trade_off: 0.5
     num_instances_per_class: 0
@@ -31,10 +30,10 @@ node:
     batch_size: 0
     finetune_lr: 0.0005
     lambda_proto: 1
-    lambda_proto_reg: 0
     lambda_act: 0.1
     trade_off: 0.01
     num_instances_per_class: 0
+    n_train: 5
   wikics:
     finetune_dataset: wikics
     normalize: none
@@ -43,7 +42,6 @@ node:
     batch_size: 0
     finetune_lr: 0.0001
     lambda_proto: 1
-    lambda_proto_reg: 0
     lambda_act: 1
     trade_off: 0.01
     num_instances_per_class: 0
@@ -56,10 +54,10 @@ link:
     batch_size: 0
     finetune_lr: 0.001
     lambda_proto: 0.1
-    lambda_proto_reg: 0
     lambda_act: 1
     trade_off: 0.7
     num_instances_per_class: 0
+    n_train: 1
   FB15K237:
     finetune_dataset: FB15K237
     normalize: batch
@@ -68,10 +66,10 @@ link:
     batch_size: 1024
     finetune_lr: 0.0005
     lambda_proto: 0.1
-    lambda_proto_reg: 0
     lambda_act: 0.1
     trade_off: 0.9
     num_instances_per_class: 50
+    n_train: 30
 graph:
   chemhiv:
     finetune_dataset: chemhiv
@@ -81,10 +79,10 @@ graph:
     batch_size: 1024
     finetune_lr: 0.0003
     lambda_proto: 0.1
-    lambda_proto_reg: 0
     lambda_act: 1
     trade_off: 0.8
     num_instances_per_class: 1500
+    n_train: 20
   chempcba:
     finetune_dataset: chempcba
     normalize: batch
@@ -93,7 +91,7 @@ graph:
     batch_size: 1024
     finetune_lr: 0.001
     lambda_proto: 1
-    lambda_proto_reg: 0
     lambda_act: 1
     trade_off: 0.5
     num_instances_per_class: 20
+    n_train: 20
