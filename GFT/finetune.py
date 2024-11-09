@@ -141,8 +141,6 @@ def run(params):
             path = osp.join(params['pt_model_path'], "codebook_size_{}_layer_{}_pretrain_on_{}_seed_{}".format(
                 params["codebook_size"], params["num_layers"], params["pretrain_dataset"], params['pretrain_seed']
             ))
-        elif pretrain_task in ['feat_only', 'topo_only', 'sem_only', 'no_codebook', 'no_aug', 'no_ortho_reg']:
-            path = osp.join(params['ablation_model_path'], "{}".format(pretrain_task))
         else:
             raise ValueError("Invalid Pretrain Task")
 
@@ -258,15 +256,8 @@ def run(params):
 if __name__ == "__main__":
     params = get_args_finetune()
 
-    # params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
-    # params['pt_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
-    # params['ablation_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'ablation_model')
-    # params['ft_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'finetune_model')
-
-    params['data_path'] = '/scratch365/zwang43/GFM/data'
-    params['pt_model_path'] = '/scratch365/zwang43/GFM/ckpts/pretrain_model'
-    params['ablation_model_path'] = '/scratch365/zwang43/GFM/ckpts/ablation_model'
-    params['ft_model_path'] = '/scratch365/zwang43/GFM/ckpts/finetune_model'
+    params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
+    params['pt_model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
 
     dataset = params["finetune_dataset"]
     task = dataset2task[dataset]

@@ -19,10 +19,6 @@ The official implementation of GFT, a cross-domain cross-task foundation model o
 
 Authored by [Zehong Wang](https://zehong-wang.github.io/), [Zheyuan Zhang](https://jasonzhangzy1757.github.io/), [Nitesh V Chawla](https://niteshchawla.nd.edu/), [Chuxu Zhang](https://chuxuzhang.github.io/), and [Yanfang Ye](http://yes-lab.org/).
 
-## TODO
-
-1. Run experiments with different seeds, report the values. Release the checkpoints.
-2. A better data interface
 
 ## Overview
 
@@ -319,7 +315,7 @@ The experimental results may vary due to the randomized initialization during pr
 
 
 |               | Cora          | PubMed        | Wiki-CS       | Arxiv         | WN18RR        | FB15K237      | HIV           | PCBA          | Average |
-| ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------- |
+| ------------------ | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ |
 | **Seed = 1** | 78.58 ± 0.90 | 77.55 ± 1.54 | 79.38 ± 0.57 | 72.24 ± 0.16 | 91.56 ± 0.33 | 89.67 ± 0.35 | 72.69 ± 1.93 | 78.24 ± 0.23 | 79.99   |
 | **Seed = 2** | 78.27 ± 1.26 | 76.41 ± 1.36 | 79.36 ± 0.62 | 72.13 ± 0.24 | 91.72 ± 0.19 | 89.66 ± 0.31 | 71.62 ± 2.45 | 78.20 ± 0.33 | 79.67   |
 | **Seed = 3** | 78.16 ± 1.62 | 76.28 ± 1.37 | 79.32 ± 0.65 | 72.13 ± 0.30 | 91.57 ± 0.44 | 89.78 ± 0.23 | 71.58 ± 2.28 | 78.12 ± 0.37 | 79.62   |

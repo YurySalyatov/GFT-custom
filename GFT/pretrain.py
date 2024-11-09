@@ -163,11 +163,8 @@ def run(params):
 if __name__ == "__main__":
     params = get_args_pretrain()
 
-    # params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
-    # params['model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
-
-    params['data_path'] = '/scratch365/zwang43/GFM/data'
-    params['model_path'] = '/scratch365/zwang43/GFM/ckpts/pretrain_model'
+    params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
+    params['model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
 
     if params['use_params']:
         with open(osp.join(osp.dirname(__file__), '..', 'config', 'pretrain.yaml'), 'r') as f:
