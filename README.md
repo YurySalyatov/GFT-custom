@@ -5,8 +5,7 @@
 [![pytorch](https://img.shields.io/badge/PyTorch_1.13+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
 [![pyg](https://img.shields.io/badge/PyG_2.3+-3C2179?logo=pyg&logoColor=#3C2179)](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html)
 ![license](https://img.shields.io/badge/License-MIT-green.svg?labelColor=gray)
-
-<!-- [![GFT arxiv](http://img.shields.io/badge/arxiv-2310.04562-yellow.svg)](https://arxiv.org/abs/2310.04562) -->
+[![GFT arxiv](http://img.shields.io/badge/arxiv-2411.06070-yellow.svg)](https://arxiv.org/abs/2411.06070)
 
 <!-- [![UltraQuery arxiv](http://img.shields.io/badge/arxiv-2404.07198-yellow.svg)](https://arxiv.org/abs/2404.07198) -->
 
@@ -28,10 +27,6 @@ GFT is a cross-domain and cross-task graph foundation model, which treats comput
 
 During pre-training, the model encodes general knowledge from a graph database into a tree vocabulary through a tree reconstruction task. In fine-tuning, the learned tree vocabulary is applied to unify graph-related tasks as tree classification tasks, adapting the acquired general knowledge to specific tasks.
 
-<!-- ## Update
-
-**Oct 30, 2024:** Initialized the repo.  -->
-
 ## Installation
 
 You may use conda to install the environment. Please run the following script. We run all experiments on a single A40 48G GPU, yet A GPU with 24G memory is sufficient to handle all datasets with mini-batch.
@@ -51,7 +46,7 @@ We use datasets provided by [OFA](https://github.com/LechengKong/OneForAll). You
 
 Alternatively, you can download our [preprocessed datasets](https://drive.google.com/file/d/18IvieNPWm0ZavSsHvxujXSGFP1tuxRAH/view?usp=sharing) and unzip on the `/data` folder.
 
-**TODO:** We plan to provide an interface to decompose the data preprocessing and model training, and bring your own dataset.
+<!-- **TODO:** We plan to provide an interface to decompose the data preprocessing and model training, and bring your own dataset. -->
 
 ## Quick Start
 
@@ -323,7 +318,7 @@ The experimental results may vary due to the randomized initialization during pr
 | **Seed = 5** | 78.56 ± 1.62 | 76.49 ± 2.00 | 79.27 ± 0.55 | 72.18 ± 0.26 | 91.47 ± 0.39 | 89.80 ± 0.19 | 72.27 ± 0.93 | 78.31 ± 0.34 | 79.79   |
 | **Reported** | 78.62 ± 1.21 | 77.19 ± 1.99 | 79.39 ± 0.42 | 71.93 ± 0.12 | 91.91 ± 0.34 | 89.72 ± 0.20 | 72.67 ± 1.38 | 77.90 ± 0.64 | 79.92   |
 
-To better ensure the reproducibility, we provide the checkpoints of **Seed = 1** in this link. We select this due to its best average performance. You can unzip the downloaded file in the path `ckpts/pretrain_model/`, and set the `--pt_seed 1` when using `finetune.py` to delicately leverage our provided checkpoints. 
+To better ensure the reproducibility, we provide the checkpoints of **Seed = 1** in [this link](https://drive.google.com/file/d/1fuXyHORZLHSwA4PyjoazYYDH4iEk0xYL/view?usp=sharing). We select this due to its best average performance. You can unzip the downloaded file in the path `ckpts/pretrain_model/`, and set the `--pt_seed 1` when using `finetune.py` to delicately leverage our provided checkpoints. 
 
 ## Contact Us
 
