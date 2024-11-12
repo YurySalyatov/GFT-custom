@@ -199,6 +199,8 @@ python GFT/finetune.py
 
 You can set `--dataset` to indicate the downstream dataset, and `--use_params` to use the pre-defined hyper-parameters for each dataset. Other hyper-parameters you can indicate are presented as follows.
 
+For graphs with 1 pre-defined splitting, you can set `--repeat` to conduct multiple experiments. 
+
 <details>
   <summary><b>Encoder</b></summary>
 
