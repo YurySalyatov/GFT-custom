@@ -146,27 +146,70 @@ def mask2idx(mask):
 
 def get_pt_data(data_path, setting="all"):
     from torch_geometric.data import Batch
+    import os
 
+    # 1. Получаем список имён датасетов
     if isinstance(setting, list):
         dataset_names = []
         for s in setting:
-            dataset_names.extend(datasets.get(s, s))
+            if s in WEIGHT:
+                dataset_names.extend(WEIGHT[s].keys())
+            else:
+                dataset_names.append(s)
     elif isinstance(setting, str):
-        dataset_names = datasets.get(setting, setting)
+        if setting in WEIGHT:
+            dataset_names = list(WEIGHT[setting].keys())
+        else:
+            dataset_names = [setting]
+    else:
+        raise ValueError(f"Unsupported setting type: {type(setting)}")
 
     print(f"Pre-training on {dataset_names}")
 
-    tasks = get_task_constructor(data_path)
+    tasks = None  # будет создан только при необходимости
     dataset_list = []
 
     for dataset_name in dataset_names:
-        data_config = data_config_lookup[dataset_name]
-        dataset = tasks.get_ofa_data(data_config)
-        dataset = refine_dataset(dataset)
-        dataset = span_node_and_edge_idx(dataset)
-        dataset = filter_unnecessary_attrs(dataset)
-        dataset_list.append(dataset.data)
+        if dataset_name in data_config_lookup:
+            # --- Загрузка через OFA (стандартные датасеты) ---
+            if tasks is None:
+                tasks = get_task_constructor(data_path)
+            data_config = data_config_lookup[dataset_name]
+            dataset = tasks.get_ofa_data(data_config)
+            dataset = refine_dataset(dataset)
+            dataset = span_node_and_edge_idx(dataset)
+            dataset = filter_unnecessary_attrs(dataset)
+            dataset_list.append(dataset.data)
+        else:
+            # --- Прямая загрузка из папки (ваши датасеты) ---
+            file_path = os.path.join(data_path, dataset_name, 'processed', 'geometric_data_processed.pt')
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Data file not found: {file_path}")
+            data_obj = torch.load(file_path)
+            # Если файл содержит кортеж (data, slices), берём только data
+            if isinstance(data_obj, tuple) and len(data_obj) == 2:
+                data_obj, _ = data_obj
+            # Удаляем node_mapping, если он есть (не нужен для обучения)
+            if hasattr(data_obj, 'node_mapping'):
+                del data_obj.node_mapping
+            # Проверяем наличие обязательных полей
+            required_fields = ['node_text_feat', 'edge_text_feat', 'edge_index']
+            for f in required_fields:
+                if not hasattr(data_obj, f):
+                    raise ValueError(f"Data in {file_path} missing required field: {f}")
+            # Добавляем x и xe, если их нет
+            if not hasattr(data_obj, 'x'):
+                data_obj.x = torch.arange(data_obj.node_text_feat.size(0), dtype=torch.long)
+            if not hasattr(data_obj, 'xe'):
+                if hasattr(data_obj, 'edge_attr') and data_obj.edge_attr is not None:
+                    # Если есть one-hot edge_attr, берём argmax
+                    data_obj.xe = data_obj.edge_attr.argmax(dim=1)
+                else:
+                    # Иначе все рёбра одного типа (индекс 0)
+                    data_obj.xe = torch.zeros(data_obj.edge_index.size(1), dtype=torch.long)
+            dataset_list.append(data_obj)
 
+    # 2. Перенумерация индексов (как в оригинале)
     def preprocess_dataset_list(dataset_list):
         x_start, xe_start = 0, 0
         for dataset in dataset_list:

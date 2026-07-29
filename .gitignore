@@ -1,3 +1,6 @@
 /cache_data/
 /wandb/
-/GFT/data
+/GFT/dataset/data/
+/data/
+/__pycache__/
+/**/__pycache__/
