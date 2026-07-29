@@ -1,13 +1,17 @@
 all:
-  cora: 5
-  pubmed: 5
-  arxiv: 5
-  wikics: 5
-  WN18RR: 5
-  FB15K237: 10
-  chemhiv: 1
-  chemblpre: 0.1
-  chempcba: 0.1
+  # cora: 5
+  # pubmed: 5
+  # arxiv: 5
+  # wikics: 5
+  # WN18RR: 5
+  # FB15K237: 10
+  # chemhiv: 1
+  # chemblpre: 0.1
+  # chempcba: 0.1
+  # pubmed: 5
+  arnetminer: 5
+  qian: 5
+  zbmath: 5
 
 node:
   cora: 5
