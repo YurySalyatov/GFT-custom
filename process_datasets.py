@@ -1,6 +1,6 @@
 import torch
 import os
-graph_dir = f"{os.getcwd()}/../graph_dir/"
+graph_dir = f"{os.getcwd()}/graph_dir/"
 print(os.getcwd() + graph_dir)
 names = ['arnetminer', 'qian', 'zbmath']
 from utils import hetero_to_homo
