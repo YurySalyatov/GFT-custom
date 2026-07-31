@@ -141,7 +141,7 @@ def main():
     }
     import os
     checkpoint_dir = f'{os.getcwd()}/ckpts/pretrain_model/codebook_size_128_layer_2_pretrain_on_all_seed_42'
-    epoch = 50
+    epoch = 18
     graph_path = f'{os.getcwd()}/data/pubmed/processed/geometric_data_processed.pt'
     output_dir = './'
 
