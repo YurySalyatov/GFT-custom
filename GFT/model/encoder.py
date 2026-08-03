@@ -76,9 +76,10 @@ class MySAGEConv(MessagePassing):
 
         if self.project and hasattr(self, 'lin'):
             x = (self.lin(x[0]).relu(), x[1])
-
+        self.current_xe = edge_attr
         # propagate_type: (x: OptPairTensor)
-        out = self.propagate(edge_index, x=x, size=size, xe=edge_attr)
+        out = self.propagate(edge_index, x=x, size=size)
+        self.current_xe = None
         out = self.lin_l(out)
 
         x_r = x[1]
@@ -90,10 +91,10 @@ class MySAGEConv(MessagePassing):
 
         return out
 
-    def message(self, x_j: Tensor, xe, **kwargs) -> Tensor:
-        return (x_j + xe).relu()
+    def message(self, x_j: Tensor) -> Tensor:
+        return (x_j + self.current_xe).relu()
 
-    def message_and_aggregate(self, adj_t: SparseTensor, x: OptPairTensor, **kwargs) -> Tensor:
+    def message_and_aggregate(self, adj_t: SparseTensor, x: OptPairTensor) -> Tensor:
         if isinstance(adj_t, SparseTensor):
             adj_t = adj_t.set_value(None, layout=None)
         return spmm(adj_t, x[0], reduce=self.aggr)
