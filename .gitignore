@@ -7,3 +7,5 @@
 /ckpts/
 /graph_dir/
 *.zip
+/.idea/
+/GFT-data
