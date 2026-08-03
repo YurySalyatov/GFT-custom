@@ -93,7 +93,7 @@ class MySAGEConv(MessagePassing):
     def message(self, x_j: Tensor, xe) -> Tensor:
         return (x_j + xe).relu()
 
-    def message_and_aggregate(self, adj_t: SparseTensor, x: OptPairTensor) -> Tensor:
+    def message_and_aggregate(self, adj_t: SparseTensor, x: OptPairTensor, **kwargs) -> Tensor:
         if isinstance(adj_t, SparseTensor):
             adj_t = adj_t.set_value(None, layout=None)
         return spmm(adj_t, x[0], reduce=self.aggr)
