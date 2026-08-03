@@ -94,7 +94,7 @@ lightning-utilities==0.9.0
 lockfile==0.12.2
 markdown-it-py==3.0.0
 markupsafe==2.1.1
-matplotlib-base==3.7.1
+matplotlib==3.7.1
 mccabe==0.7.0
 mdurl==0.1.0
 more-itertools==9.1.0
