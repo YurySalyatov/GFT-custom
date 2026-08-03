@@ -185,7 +185,7 @@ def get_pt_data(data_path, setting="all"):
             file_path = os.path.join(data_path, dataset_name, 'processed', 'geometric_data_processed.pt')
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Data file not found: {file_path}")
-            data_obj = torch.load(file_path)
+            data_obj = torch.load(file_path, weights_only=False)
             # Если файл содержит кортеж (data, slices), берём только data
             if isinstance(data_obj, tuple) and len(data_obj) == 2:
                 data_obj, _ = data_obj
