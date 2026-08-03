@@ -90,7 +90,7 @@ class MySAGEConv(MessagePassing):
 
         return out
 
-    def message(self, x_j: Tensor, xe) -> Tensor:
+    def message(self, x_j: Tensor, xe, **kwargs) -> Tensor:
         return (x_j + xe).relu()
 
     def message_and_aggregate(self, adj_t: SparseTensor, x: OptPairTensor, **kwargs) -> Tensor:
