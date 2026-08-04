@@ -120,13 +120,13 @@ def active_code(encoder, vq, data):
     return indices.unique(), indices.unique().numel() / (codebook_size * codebook_head)
 
 
-def load_params(model, path):
+def load_params(model, path, device=torch.device('cpu')):
     if isinstance(model, Encoder):
-        model.load_state_dict(torch.load(path))
+        model.load_state_dict(torch.load(path, device=device))
     elif isinstance(model, VectorQuantize):
         z = torch.randn(100, model.dim)
         model(z)
-        model.load_state_dict(torch.load(path))
+        model.load_state_dict(torch.load(path, device=device))
     return model
 
 
