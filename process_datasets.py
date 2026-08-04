@@ -27,7 +27,6 @@ for name in names:
 
     hetero_data = torch.load(f"{graph_dir}{name}/{filename}", weights_only=False)
     data = hetero_to_homo(hetero_data, f"{graph_dir}edge_embeddings.pkl")
-    print(data)
 
     save_path = f"data/{name}/processed"
     os.makedirs(save_path, exist_ok=True)
