@@ -146,8 +146,8 @@ def run(params):
 
         # Save the model
         save_path = params['model_path']
-        save_path = osp.join(save_path, 'codebook_size_{}_layer_{}_pretrain_on_{}_seed_{}'.format(
-            params["codebook_size"], params["num_layers"], params["pretrain_dataset"], params['seed']))
+        save_name = params.get('save_name', "")
+        save_path = osp.join(save_path, f'codebook_size_{params["codebook_size"]}_layer_{params["num_layers"]}_pretrain_on_{save_name}_seed_{params["seed"]}')
         check_path(save_path)
 
         try:
@@ -164,7 +164,11 @@ if __name__ == "__main__":
     params = get_args_pretrain()
 
     params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
-    params['model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
+    # Переопределяем пути, если переданы аргументы
+    if params.save_dir:
+        params['model_path'] = params.save_dir
+    else:
+        params['model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
 
     if params['use_params']:
         with open(osp.join(osp.dirname(__file__), '..', 'config', 'pretrain.yaml'), 'r') as f:
