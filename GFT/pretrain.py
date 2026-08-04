@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
     params['data_path'] = osp.join(osp.dirname(__file__), '..', 'data')
     # Переопределяем пути, если переданы аргументы
-    if params.save_dir:
+    if params['save_dir']:
         params['model_path'] = params.save_dir
     else:
         params['model_path'] = osp.join(osp.dirname(__file__), '..', 'ckpts', 'pretrain_model')
