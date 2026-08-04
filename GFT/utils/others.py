@@ -122,11 +122,11 @@ def active_code(encoder, vq, data):
 
 def load_params(model, path, device=torch.device('cpu')):
     if isinstance(model, Encoder):
-        model.load_state_dict(torch.load(path, device=device))
+        model.load_state_dict(torch.load(path, map_location=device))
     elif isinstance(model, VectorQuantize):
         z = torch.randn(100, model.dim)
         model(z)
-        model.load_state_dict(torch.load(path, device=device))
+        model.load_state_dict(torch.load(path, map_location=device))
     return model
 
 
