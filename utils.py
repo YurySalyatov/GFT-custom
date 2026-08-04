@@ -148,6 +148,8 @@ def hetero_to_homo(hetero_data: HeteroData, edge_embeddings_path: Optional[str] 
         edge_index=edge_index,
         node_type_onehot=node_type_onehot,
         edge_attr_onehot=edge_attr,
-        node_mapping=mapping
+        # node_mapping=mapping
     )
+    print(data)
+    data.node_mapping = mapping
     return data
