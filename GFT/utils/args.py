@@ -43,6 +43,11 @@ def get_args_pretrain():
     parser.add_argument('--sem_encoder_decay', type=float, default=0.99)
     parser.add_argument('--use_schedular', type=bool, default=True)
 
+    parser.add_argument('--save_dir', type=str, default=None,
+                        help='Root directory to save checkpoints (overrides default)')
+    parser.add_argument('--save_name', type=str, default='all',
+                        help='Name for the checkpoint subfolder (e.g., arnetminer_qian)')
+
     args = parser.parse_args()
     return vars(args)
 
