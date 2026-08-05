@@ -149,7 +149,16 @@ def run(params):
         save_name = params.get('save_name', "")
         save_path = osp.join(save_path, f'codebook_size_{params["codebook_size"]}_layer_{params["num_layers"]}_pretrain_on_{save_name}_seed_{params["seed"]}')
         check_path(save_path)
-
+        if i == 1:
+            # Сохраняем информацию о размере обучающей выборки в папку модели
+            info_path = osp.join(save_path, 'info.txt')
+            with open(info_path, 'w') as f:
+                f.write(f"num_training_nodes: {len(train_nodes)}\n")
+                f.write(f"pretrain_dataset: {params['pretrain_dataset']}\n")
+                f.write(f"codebook_size: {params['codebook_size']}\n")
+                f.write(f"num_layers: {params['num_layers']}\n")
+                # можно добавить другие параметры, например, seed
+            print(f"Info saved to {info_path}")
         try:
             pretrain_model.save_encoder(osp.join(save_path, f"encoder_{i}.pt"))
             pretrain_model.save_vq(osp.join(save_path, f"vq_{i}.pt"))
