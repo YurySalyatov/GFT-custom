@@ -154,7 +154,9 @@ def run(params):
             info_path = osp.join(save_path, 'info.txt')
             with open(info_path, 'w') as f:
                 f.write(f"num_training_nodes: {len(train_nodes)}\n")
-                f.write(f"pretrain_dataset: {params['pretrain_dataset']}\n")
+                datasets = save_name.split("_")
+                datasets = [f"\"{d}\"" for d in datasets]
+                f.write(f"pretrain_dataset: {", ".join(datasets)}\n")
                 f.write(f"codebook_size: {params['codebook_size']}\n")
                 f.write(f"num_layers: {params['num_layers']}\n")
                 # можно добавить другие параметры, например, seed
