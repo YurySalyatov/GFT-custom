@@ -106,8 +106,11 @@ def extract_embeddings_by_type_batched(encoder, vq, data, node_mapping, device,
                 type_to_indices.setdefault(ntype, []).append(hetero)
 
     # Формируем результат, сортируя по hetero_idx
+    target_type = 'author'
     result = {}
     for ntype in type_to_embeddings:
+        if ntype != target_type:
+            continue
         pairs = sorted(zip(type_to_indices[ntype], type_to_embeddings[ntype]), key=lambda x: x[0])
         hetero_indices = [p[0] for p in pairs]
         embeddings = np.stack([p[1] for p in pairs], axis=0)
@@ -161,14 +164,14 @@ def main():
     )
 
     os.makedirs(args.output_dir, exist_ok=True)
-    out_npz = os.path.join(args.output_dir, f'{args.dataset}_embeddings.npz')
+    # out_npz = os.path.join(args.output_dir, f'{args.dataset}_embeddings.npz')
     out_pkl = os.path.join(args.output_dir, f'{args.dataset}_embeddings.pkl')
 
     output_data = {}
     for ntype, info in result.items():
         output_data[f'{ntype}_embeddings'] = info['embeddings']
         output_data[f'{ntype}_hetero_indices'] = np.array(info['hetero_indices'])
-    np.savez(out_npz, **output_data)
+    # np.savez(out_npz, **output_data)
     with open(out_pkl, 'wb') as f:
         pickle.dump(result, f)
 
