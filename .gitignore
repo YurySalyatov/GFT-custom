@@ -8,4 +8,5 @@
 /graph_dir/
 *.zip
 /.idea/
-/GFT-data
+/GFT-data/
+/results0-4/
