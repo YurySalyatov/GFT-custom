@@ -7,7 +7,7 @@ activation: relu
 backbone: sage
 normalize: batch
 dropout: 0.15
-code_dim: 768
+code_dim: 64
 codebook_size: 128
 codebook_head: 4
 codebook_decay: 0.8
