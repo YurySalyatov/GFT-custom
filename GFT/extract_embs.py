@@ -93,10 +93,10 @@ def extract_embeddings_by_type_batched(encoder, vq, data, node_mapping, device,
 
             # Forward pass
             z = encoder(x, edge_index, edge_attr)
-            quantize, _, _, _ = vq(z)
+            quantize, _, _, orig_quantize = vq(z)
 
             # Берём эмбеддинги только для seed-узлов (первые batch.batch_size)
-            seed_embeds = quantize[:batch.batch_size] if return_quantized else z[:batch.batch_size]
+            seed_embeds = orig_quantize[:batch.batch_size] if return_quantized else z[:batch.batch_size]
 
             # batch.input_id содержит исходные индексы seed-узлов
             seed_homo = batch.input_id.cpu().numpy()
