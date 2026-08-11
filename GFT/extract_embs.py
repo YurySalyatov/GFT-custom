@@ -122,6 +122,14 @@ def extract_embeddings_by_type_batched(encoder, vq, data, node_mapping, device,
 
 
 def main():
+    import yaml
+    import os
+    import argparse
+    import torch
+    import numpy as np
+    import pickle
+    from your_imports import load_pretrained_model, load_graph_with_mapping, extract_embeddings_by_type_batched  # замените на реальные
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, required=True, help='Name of the dataset')
     parser.add_argument('--checkpoint_dir', type=str, required=True, help='Dir with encoder_*.pt and vq_*.pt')
@@ -129,24 +137,36 @@ def main():
     parser.add_argument('--output_dir', type=str, default='./embeddings', help='Root output directory')
     parser.add_argument('--quantized', action='store_true', default=True, help='Use quantized embeddings')
     parser.add_argument('--batch_size', type=int, default=1024, help='Batch size for extraction')
-    parser.add_argument('--num_layers', type=int, default=2, help='Number of GNN layers (must match training)')
+    # Убираем --num_layers, так как теперь берём из конфига
+    # parser.add_argument('--num_layers', type=int, default=2, help='Number of GNN layers (must match training)')
     args = parser.parse_args()
 
-    # Параметры модели – должны совпадать с обучением
+    # ========== Загрузка параметров из YAML ==========
+    config_path = '../config/pretrain.yaml'
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Извлекаем нужные для модели параметры
     params = {
-        'input_dim': 768,
-        'hidden_dim': 768,
-        'num_layers': args.num_layers,
-        'activation': 'relu',
-        'backbone': 'sage',
-        'normalize': 'batch',
-        'dropout': 0.15,
-        'codebook_size': 128,
-        'code_dim': 768,
-        'codebook_head': 4,
+        'input_dim': config['input_dim'],
+        'hidden_dim': config['hidden_dim'],
+        'num_layers': config['num_layers'],
+        'activation': config['activation'],
+        'backbone': config['backbone'],
+        'normalize': config['normalize'],
+        'dropout': config['dropout'],
+        'codebook_size': config['codebook_size'],
+        'code_dim': config['code_dim'],
+        'codebook_head': config['codebook_head'],
     }
+    # Если нужно, можно также взять другие параметры, например, для загрузки,
+    # но в load_pretrained_model используются только перечисленные выше.
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Loading model from {args.checkpoint_dir}, epoch {args.epoch}")
+    print(f"Model parameters: {params}")
     encoder, vq = load_pretrained_model(params, args.checkpoint_dir, args.epoch, device)
 
     graph_path = f'data/{args.dataset}/processed/geometric_data_processed.pt'
@@ -159,26 +179,23 @@ def main():
     result = extract_embeddings_by_type_batched(
         encoder, vq, data, node_mapping, device,
         batch_size=args.batch_size,
-        num_layers=args.num_layers,
+        num_layers=params['num_layers'],  # теперь берём из конфига
         return_quantized=args.quantized
     )
 
     os.makedirs(args.output_dir, exist_ok=True)
-    # out_npz = os.path.join(args.output_dir, f'{args.dataset}_embeddings.npz')
     out_pkl = os.path.join(args.output_dir, f'{args.dataset}_embeddings.pkl')
 
     output_data = {}
     for ntype, info in result.items():
         output_data[f'{ntype}_embeddings'] = info['embeddings']
         output_data[f'{ntype}_hetero_indices'] = np.array(info['hetero_indices'])
-    # np.savez(out_npz, **output_data)
     with open(out_pkl, 'wb') as f:
         pickle.dump(result, f)
 
     print(f"Saved to {args.output_dir}")
     for ntype, info in result.items():
         print(f"Type '{ntype}': {info['embeddings'].shape[0]} nodes, dim {info['embeddings'].shape[1]}")
-
 
 if __name__ == '__main__':
     main()
