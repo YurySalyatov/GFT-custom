@@ -128,7 +128,6 @@ def main():
     import torch
     import numpy as np
     import pickle
-    from your_imports import load_pretrained_model, load_graph_with_mapping, extract_embeddings_by_type_batched  # замените на реальные
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, required=True, help='Name of the dataset')
