@@ -230,9 +230,9 @@ def get_pt_data(data_path, setting="all"):
             x_start += num_unique_nodes
             xe_start += num_edge_types
             print(f"after renumber nodes and edges {dataset_name}")
-            print(data_obj.edge_text_feat.size())
-            print(data_obj.xe.size())
-            print(max(data_obj.xe))
+            print(dataset.edge_text_feat.size())
+            print(dataset.xe.size())
+            print(max(dataset.xe))
             print("\n\n")
         return dataset_list
 
