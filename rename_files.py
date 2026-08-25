@@ -22,6 +22,11 @@ for name in names:
     filename = "homo_graph_with_embeddings.pt"
 
     homo_data = torch.load(f"{graph_dir}{name}/{filename}", weights_only=False)
+    print("before rename")
+    print(homo_data.edge_text_feat.size())
+    print(homo_data.xe.size())
+    print(max(homo_data.xe))
+    print("\n\n")
     print(homo_data["node_text_feat"][0][:10])
     # Нормализация эмбеддингов узлов
     if "node_text_feat" in homo_data:
@@ -43,7 +48,11 @@ for name in names:
         else:
             homo_data["edge_text_feat"] = F.normalize(homo_data["edge_text_feat"], p=2, dim=-1)
     print(homo_data["edge_text_feat"][0][:10])
-
+    print("after rename")
+    print(homo_data.edge_text_feat.size())
+    print(homo_data.xe.size())
+    print(max(homo_data.xe))
+    print("\n\n")
     save_path = f"data/{name}/processed"
     os.makedirs(save_path, exist_ok=True)
     torch.save(homo_data, f"{save_path}/geometric_data_processed.pt")
