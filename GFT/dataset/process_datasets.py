@@ -186,6 +186,11 @@ def get_pt_data(data_path, setting="all"):
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Data file not found: {file_path}")
             data_obj = torch.load(file_path, weights_only=False)
+            print(f"in load {dataset_name}")
+            print(data_obj.edge_text_feat.size())
+            print(data_obj.xe.size())
+            print(max(data_obj.xe))
+            print("\n\n")
             # Если файл содержит кортеж (data, slices), берём только data
             if isinstance(data_obj, tuple) and len(data_obj) == 2:
                 data_obj, _ = data_obj
