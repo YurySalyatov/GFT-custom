@@ -28,6 +28,9 @@ def pretrain(model, loader, optimizer, params, scheduler=None, no_codebook=False
 
     for data in loader:
         print(f"in load first")
+        print(data.node_text_feat.size())
+        print(data.x.size())
+        print(max(data.x))
         print(data.edge_text_feat.size())
         print(data.xe.size())
         print(max(data.xe))
@@ -40,7 +43,7 @@ def pretrain(model, loader, optimizer, params, scheduler=None, no_codebook=False
         else:
             x = data.node_text_feat.to(device)
         edge_index = data.edge_index.to(device)
-        edge_attr = data.edge_text_feat[data.xe].to(device)
+        edge_attr = data.edge_text_feat.to(device)
         graph = [x, edge_index, edge_attr]
 
         aug_x, _ = mask_feature(x, p=params['feat_p'])
