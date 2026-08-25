@@ -9,7 +9,7 @@ parser.add_argument('--datasets', type=str, default='arnetminer,qian,zbmath',
                     help='Comma-separated list of dataset names, e.g., "arnetminer,qian"')
 args = parser.parse_args()
 
-graph_dir = f"{os.getcwd()}/graph_dir2/"
+graph_dir = f"{os.getcwd()}/graph_dir/"
 print(os.getcwd() + graph_dir)
 
 # Разбиваем строку на список, удаляем лишние пробелы
