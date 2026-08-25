@@ -213,6 +213,11 @@ def get_pt_data(data_path, setting="all"):
                     # Иначе все рёбра одного типа (индекс 0)
                     data_obj.xe = torch.zeros(data_obj.edge_index.size(1), dtype=torch.long)
             dataset_list.append(data_obj)
+            print(f"after add list {dataset_name}")
+            print(data_obj.edge_text_feat.size())
+            print(data_obj.xe.size())
+            print(max(data_obj.xe))
+            print("\n\n")
 
     # 2. Перенумерация индексов (как в оригинале)
     def preprocess_dataset_list(dataset_list):
@@ -224,6 +229,11 @@ def get_pt_data(data_path, setting="all"):
             dataset.xe += xe_start
             x_start += num_unique_nodes
             xe_start += num_edge_types
+            print(f"after renumber nodes and edges {dataset_name}")
+            print(data_obj.edge_text_feat.size())
+            print(data_obj.xe.size())
+            print(max(data_obj.xe))
+            print("\n\n")
         return dataset_list
 
     dataset_list = preprocess_dataset_list(dataset_list)
