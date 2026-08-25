@@ -27,14 +27,14 @@ def pretrain(model, loader, optimizer, params, scheduler=None, no_codebook=False
     device = get_device_from_model(model)
 
     for data in loader:
-        print(f"in load first")
-        print(data.node_text_feat.size())
-        print(data.x.size())
-        print(max(data.x))
-        print(data.edge_text_feat.size())
-        print(data.xe.size())
-        print(max(data.xe))
-        print("\n\n")
+        # print(f"in load first")
+        # print(data.node_text_feat.size())
+        # print(data.x.size())
+        # print(max(data.x))
+        # print(data.edge_text_feat.size())
+        # print(data.xe.size())
+        # print(max(data.xe))
+        # print("\n\n")
         bs = data.batch_size
         data_x_is_idx = data.x.size(0) != data.node_text_feat.size(0)
 
