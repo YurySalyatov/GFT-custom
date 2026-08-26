@@ -89,7 +89,7 @@ def extract_embeddings_by_type_batched(encoder, vq, data, node_mapping, device,
             # Перемещаем данные на устройство
             x = batch.node_text_feat.to(device)
             edge_index = batch.edge_index.to(device)
-            edge_attr = batch.edge_text_feat[batch.xe].to(device)
+            edge_attr = batch.edge_text_feat.to(device)
 
             # Forward pass
             z = encoder(x, edge_index, edge_attr)
