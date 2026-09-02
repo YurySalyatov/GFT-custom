@@ -2,7 +2,7 @@ pretrain_dataset: all
 weight_setting: all
 input_dim: 768
 hidden_dim: 768
-num_layers: 2
+num_layers: 3
 activation: relu
 backbone: sage
 normalize: batch
