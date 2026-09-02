@@ -8,13 +8,13 @@ backbone: sage
 normalize: batch
 dropout: 0.15
 code_dim: 768
-codebook_size: 256
+codebook_size: 128
 codebook_head: 4
 codebook_decay: 0.8
 commit_weight: 10
 ortho_reg_weight: 1
-ortho_reg_max_codes: 64
-pretrain_epochs: 100
+ortho_reg_max_codes: 32
+pretrain_epochs: 50
 pretrain_lr: 0.0001
 pretrain_weight_decay: 0.00001
 pretrain_batch_size: 1024
