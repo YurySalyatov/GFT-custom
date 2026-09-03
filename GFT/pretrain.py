@@ -27,6 +27,7 @@ def pretrain(model, loader, optimizer, params, scheduler=None, no_codebook=False
     device = get_device_from_model(model)
 
     for data in loader:
+        print(data)
         # print(f"in load first")
         # print(data.node_text_feat.size())
         # print(data.x.size())
@@ -147,7 +148,7 @@ def run(params):
             loader = NeighborLoader(pretrain_data, input_nodes=train_nodes,
                                     num_neighbors=[10] * params["num_layers"],
                                     batch_size=batch_size, shuffle=True,
-                                    edge_attrs=['edge_text_feat'])
+                                    )
             print("Number of mini-batches is {} at epoch {}.".format(len(loader), i))
 
         # Pretrain
