@@ -146,7 +146,8 @@ def run(params):
 
             loader = NeighborLoader(pretrain_data, input_nodes=train_nodes,
                                     num_neighbors=[10] * params["num_layers"],
-                                    batch_size=batch_size, shuffle=True)
+                                    batch_size=batch_size, shuffle=True,
+                                    edge_attrs=['edge_text_feat'])
             print("Number of mini-batches is {} at epoch {}.".format(len(loader), i))
 
         # Pretrain
