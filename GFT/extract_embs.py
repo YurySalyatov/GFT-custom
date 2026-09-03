@@ -61,9 +61,13 @@ def load_graph_with_mapping(data_path):
 
 
 def extract_embeddings_by_type_batched(encoder, vq, data, node_mapping, device,
-                                       batch_size=1024, num_layers=2, return_quantized=True):
+                                       batch_size=1024, num_layers=2):
     """
     Извлекает эмбеддинги для всех узлов, обрабатывая их батчами с использованием NeighborLoader.
+    Возвращает для каждого типа узлов словарь с:
+      - hetero_indices: список исходных гетеро-индексов
+      - embeddings_z: массив неквантованных эмбеддингов (размер N x dim)
+      - embeddings_quantized: массив квантованных эмбеддингов (размер N x dim)
     """
     # Все целевые узлы (их homo-индексы)
     target_nodes = torch.tensor(list(node_mapping.values()), dtype=torch.long)
@@ -81,8 +85,9 @@ def extract_embeddings_by_type_batched(encoder, vq, data, node_mapping, device,
     homo_to_type_and_hetero = {homo: (ntype, hetero) for (ntype, hetero), homo in node_mapping.items()}
 
     # Временные хранилища
-    type_to_embeddings = {}
     type_to_indices = {}
+    type_to_z = {}
+    type_to_quantized = {}
 
     with torch.no_grad():
         for batch in tqdm(loader, desc="Extracting embeddings"):
@@ -96,27 +101,30 @@ def extract_embeddings_by_type_batched(encoder, vq, data, node_mapping, device,
             quantize, _, _, orig_quantize = vq(z)
 
             # Берём эмбеддинги только для seed-узлов (первые batch.batch_size)
-            seed_embeds = orig_quantize[:batch.batch_size] if return_quantized else z[:batch.batch_size]
+            seed_z = z[:batch.batch_size]
+            seed_q = orig_quantize[:batch.batch_size]
 
             # batch.input_id содержит исходные индексы seed-узлов
             seed_homo = batch.input_id.cpu().numpy()
             for i, homo in enumerate(seed_homo):
                 ntype, hetero = homo_to_type_and_hetero[homo]
-                type_to_embeddings.setdefault(ntype, []).append(seed_embeds[i].cpu().numpy())
                 type_to_indices.setdefault(ntype, []).append(hetero)
+                type_to_z.setdefault(ntype, []).append(seed_z[i].cpu().numpy())
+                type_to_quantized.setdefault(ntype, []).append(seed_q[i].cpu().numpy())
 
     # Формируем результат, сортируя по hetero_idx
-    target_type = 'author'
     result = {}
-    for ntype in type_to_embeddings:
-        if ntype != target_type:
-            continue
-        pairs = sorted(zip(type_to_indices[ntype], type_to_embeddings[ntype]), key=lambda x: x[0])
+    for ntype in type_to_indices:
+        # Сортируем по hetero_idx
+        pairs = sorted(zip(type_to_indices[ntype], type_to_z[ntype], type_to_quantized[ntype]),
+                       key=lambda x: x[0])
         hetero_indices = [p[0] for p in pairs]
-        embeddings = np.stack([p[1] for p in pairs], axis=0)
+        z_embeds = np.stack([p[1] for p in pairs], axis=0)
+        q_embeds = np.stack([p[2] for p in pairs], axis=0)
         result[ntype] = {
             'hetero_indices': hetero_indices,
-            'embeddings': embeddings,
+            'embeddings_z': z_embeds,
+            'embeddings_quantized': q_embeds,
         }
     return result
 
@@ -134,10 +142,7 @@ def main():
     parser.add_argument('--checkpoint_dir', type=str, required=True, help='Dir with encoder_*.pt and vq_*.pt')
     parser.add_argument('--epoch', type=int, default=50, help='Epoch number to load')
     parser.add_argument('--output_dir', type=str, default='./embeddings', help='Root output directory')
-    parser.add_argument('--quantized', action='store_true', default=True, help='Use quantized embeddings')
     parser.add_argument('--batch_size', type=int, default=1024, help='Batch size for extraction')
-    # Убираем --num_layers, так как теперь берём из конфига
-    # parser.add_argument('--num_layers', type=int, default=2, help='Number of GNN layers (must match training)')
     args = parser.parse_args()
 
     # ========== Загрузка параметров из YAML ==========
@@ -160,8 +165,6 @@ def main():
         'code_dim': config['code_dim'],
         'codebook_head': config['codebook_head'],
     }
-    # Если нужно, можно также взять другие параметры, например, для загрузки,
-    # но в load_pretrained_model используются только перечисленные выше.
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Loading model from {args.checkpoint_dir}, epoch {args.epoch}")
@@ -178,23 +181,23 @@ def main():
     result = extract_embeddings_by_type_batched(
         encoder, vq, data, node_mapping, device,
         batch_size=args.batch_size,
-        num_layers=params['num_layers'],  # теперь берём из конфига
-        return_quantized=args.quantized
+        num_layers=params['num_layers'],
     )
 
     os.makedirs(args.output_dir, exist_ok=True)
     out_pkl = os.path.join(args.output_dir, f'{args.dataset}_embeddings.pkl')
 
-    output_data = {}
-    for ntype, info in result.items():
-        output_data[f'{ntype}_embeddings'] = info['embeddings']
-        output_data[f'{ntype}_hetero_indices'] = np.array(info['hetero_indices'])
+    # Сохраняем в удобном формате (можно добавить оба типа)
     with open(out_pkl, 'wb') as f:
         pickle.dump(result, f)
 
     print(f"Saved to {args.output_dir}")
     for ntype, info in result.items():
-        print(f"Type '{ntype}': {info['embeddings'].shape[0]} nodes, dim {info['embeddings'].shape[1]}")
+        n_nodes = len(info['hetero_indices'])
+        dim_z = info['embeddings_z'].shape[1]
+        dim_q = info['embeddings_quantized'].shape[1]
+        print(f"Type '{ntype}': {n_nodes} nodes, z dim {dim_z}, quantized dim {dim_q}")
+
 
 if __name__ == '__main__':
     main()

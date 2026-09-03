@@ -27,7 +27,7 @@ def pretrain(model, loader, optimizer, params, scheduler=None, no_codebook=False
     device = get_device_from_model(model)
 
     for data in loader:
-        print("one data batch:", data, "\n\n")
+        # print("one data batch:", data, "\n\n")
         # print(f"in load first")
         # print(data.node_text_feat.size())
         # print(data.x.size())
@@ -91,7 +91,7 @@ def run(params):
 
     # Data
     pretrain_data = get_pt_data(params['data_path'], params["pretrain_dataset"])
-    print("pretrain_data:", pretrain_data, "\n\n")
+    # print("pretrain_data:", pretrain_data, "\n\n")
     # Model
     encoder = Encoder(
         input_dim=params["input_dim"],

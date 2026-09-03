@@ -186,6 +186,7 @@ def get_pt_data(data_path, setting="all"):
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Data file not found: {file_path}")
             data_obj = torch.load(file_path, weights_only=False)
+
             # print(f"in load {dataset_name}")
             # print(data_obj.edge_text_feat.size())
             # print(data_obj.xe.size())
@@ -367,4 +368,4 @@ def get_finetune_graph(data_path, dataset_name):
 
 if __name__ == "__main__":
     pretrain_graph = get_pt_data(["arxiv", "node"])
-    print(pretrain_graph)
+    # print(pretrain_graph)
