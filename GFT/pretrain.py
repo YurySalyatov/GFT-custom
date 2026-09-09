@@ -64,6 +64,17 @@ def pretrain(model, loader, optimizer, params, scheduler=None, no_codebook=False
         commit_loss = losses['commit_loss']
         loss = feat_recon_loss + topo_recon_loss + topo_sem_recon_loss + sem_recon_loss + commit_loss
 
+        if params.get('uniform_reg_weight', 0) > 0:
+            num_codes = params['codebook_size'] * params['codebook_head']  # общее количество кодов
+            flat_indices = indices.flatten()
+            counts = torch.bincount(flat_indices, minlength=num_codes)
+            probs = counts.float() / (counts.sum() + 1e-8)
+            # KL-дивергенция между probs и равномерным распределением
+            uniform = torch.full_like(probs, 1.0 / num_codes)
+            kl = (probs * (torch.log(probs + 1e-8) - torch.log(uniform))).sum()
+            uniform_loss = params['uniform_reg_weight'] * kl
+            loss = loss + uniform_loss
+
         optimizer.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)

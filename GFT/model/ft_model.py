@@ -150,9 +150,9 @@ class TaskModel(nn.Module):
     def get_codes(self, z, use_orig_codes=True):
         quantize, indices, commit_loss, codes = self.vq(z)
         if use_orig_codes:
-            return codes.reshape(-1, self.num_heads, self.code_dim), commit_loss
+            return codes.reshape(-1, self.num_heads, self.code_dim), indices, commit_loss
         else:
-            return quantize, commit_loss
+            return quantize, indices, commit_loss
 
     def get_class_prototypes(self, z, y, num_classes_in_total):
         if isinstance(y, dict):

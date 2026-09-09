@@ -45,12 +45,12 @@ def ft_link(model, dataset, loader, optimizer, split, labels, params, scheduler=
             # Compute Prototypes
             if query_node_code_first:
                 # Case 1: Use node code to form edge code
-                code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                 edge_code_train = (code[edge_index_train[0]] + code[edge_index_train[1]]) / 2
             else:
                 # Case 2: Query edge code using edge embeddings directly
                 # This is the default case.
-                edge_code_train, commit_loss = model.get_codes(edge_z_train, use_orig_codes=True)
+                edge_code_train, indices, commit_loss = model.get_codes(edge_z_train, use_orig_codes=True)
 
             proto_emb = model.get_class_prototypes(edge_code_train, y_train, num_classes).detach()
             query_emb = edge_z_train if params['use_z_in_predict'] else edge_code_train  # Use train set
@@ -63,7 +63,16 @@ def ft_link(model, dataset, loader, optimizer, split, labels, params, scheduler=
             act_loss = model.compute_activation_loss(edge_z_train, y_train) * params["lambda_act"]
 
         loss = proto_loss + act_loss
-
+        if params.get('uniform_reg_weight', 0) > 0:
+            num_codes = params['codebook_size'] * params['codebook_head']  # общее количество кодов
+            flat_indices = indices.flatten()
+            counts = torch.bincount(flat_indices, minlength=num_codes)
+            probs = counts.float() / (counts.sum() + 1e-8)
+            # KL-дивергенция между probs и равномерным распределением
+            uniform = torch.full_like(probs, 1.0 / num_codes)
+            kl = (probs * (torch.log(probs + 1e-8) - torch.log(uniform))).sum()
+            uniform_loss = params['uniform_reg_weight'] * kl
+            loss = loss + uniform_loss
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -115,11 +124,11 @@ def ft_link(model, dataset, loader, optimizer, split, labels, params, scheduler=
 
                 if query_node_code_first:
                     # Case 1: Use node code to form edge code
-                    code, _ = model.get_codes(z, use_orig_codes=True)
+                    code, indices, _ = model.get_codes(z, use_orig_codes=True)
                     edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                 else:
                     # Case 2: Query edge code using edge embeddings directly
-                    edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
+                    edge_code, indices, _ = model.get_codes(edge_z, use_orig_codes=True)
 
                 code_list.append(edge_code.detach())
                 y_list.append(y)
@@ -150,11 +159,11 @@ def ft_link(model, dataset, loader, optimizer, split, labels, params, scheduler=
             if use_proto_clf:
                 if query_node_code_first:
                     # Case 1: Use node code to form edge code
-                    code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                    code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                     edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                 else:
                     # Case 2: Query edge code using edge embeddings directly
-                    edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
+                    edge_code, indices, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
 
                 query_emb = edge_z if params['use_z_in_predict'] else edge_code  # Use train set
                 proto_loss = model.compute_proto_loss(query_emb, proto_emb, y) * params["lambda_proto"]
@@ -214,12 +223,12 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
 
                 if query_node_code_first:
                     # Case 1: Query node code first and then form edge code
-                    code, _ = model.get_codes(z, use_orig_codes=True)
+                    code, indices, _ = model.get_codes(z, use_orig_codes=True)
                     edge_code = (code[edge_index[0]] + code[edge_index[1]]) / 2
                     edge_code_train = edge_code[train_mask]
                 else:
                     # Case 2: Query edge code directly
-                    edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
+                    edge_code, indices, _ = model.get_codes(edge_z, use_orig_codes=True)
                     edge_code_train = edge_code[train_mask]
 
                 proto_emb = model.get_class_prototypes(edge_code_train, y_train, num_classes).detach()
@@ -268,13 +277,13 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
 
                     if query_node_code_first:
                         # Case 1: Query node code first and then form edge code
-                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        code, indices, _ = model.get_codes(z, use_orig_codes=True)
                         edge_code_support = (code[edge_index_support[0]] + code[edge_index_support[1]]) / 2
                         edge_code_query = (code[edge_index_query[0]] + code[edge_index_query[1]]) / 2
                     else:
                         # Case 2: Query edge code directly
-                        edge_code_support, _ = model.get_codes(edge_z_support, use_orig_codes=True)
-                        edge_code_query, _ = model.get_codes(edge_z_query, use_orig_codes=True)
+                        edge_code_support, indices, _ = model.get_codes(edge_z_support, use_orig_codes=True)
+                        edge_code_query, indices, _ = model.get_codes(edge_z_query, use_orig_codes=True)
 
                     proto_emb = model.get_class_prototypes(edge_code_support, y_support, num_classes).detach()
                     query_emb = edge_z_query if model.use_z_in_predict else edge_code_query
@@ -308,13 +317,13 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
 
                     if query_node_code_first:
                         # Case 1: Query node code first and then form edge code
-                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        code, indices, _ = model.get_codes(z, use_orig_codes=True)
                         edge_code_support = (code[edge_index_support[0]] + code[edge_index_support[1]]) / 2
                         edge_code_query = (code[edge_index_query[0]] + code[edge_index_query[1]]) / 2
                     else:
                         # Case 2: Query edge code directly
-                        edge_code_support, _ = model.get_codes(edge_z_support, use_orig_codes=True)
-                        edge_code_query, _ = model.get_codes(edge_z_query, use_orig_codes=True)
+                        edge_code_support, indices, _ = model.get_codes(edge_z_support, use_orig_codes=True)
+                        edge_code_query, indices, _ = model.get_codes(edge_z_query, use_orig_codes=True)
 
                     proto_emb = model.get_class_prototypes(edge_code_support, y_support, num_classes).detach()
                     query_emb = edge_z_query if model.use_z_in_predict else edge_code_query
@@ -372,11 +381,11 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
 
                     if query_node_code_first:
                         # Case 1: Use node code to form edge code
-                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        code, indices, _ = model.get_codes(z, use_orig_codes=True)
                         edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                     else:
                         # Case 2: Query edge code using edge embeddings directly
-                        edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
+                        edge_code, indices, _ = model.get_codes(edge_z, use_orig_codes=True)
 
                     code_list.append(edge_code.detach())
                     y_list.append(y)
@@ -404,11 +413,11 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
                 if use_proto_clf:
                     if query_node_code_first:
                         # Case 1: Use node code to form edge code
-                        code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                        code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                         edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                     else:
                         # Case 2: Query edge code using edge embeddings directly
-                        edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
+                        edge_code, indices, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
 
                     query_emb = edge_z if model.use_z_in_predict else edge_code  # Use train set
 
@@ -489,11 +498,11 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
 
                         if query_node_code_first:
                             # Case 1: Use node code to form edge code
-                            code, _ = model.get_codes(z, use_orig_codes=True)
+                            code, indices, _ = model.get_codes(z, use_orig_codes=True)
                             edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                         else:
                             # Case 2: Query edge code using edge embeddings directly
-                            edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
+                            edge_code, indices, _ = model.get_codes(edge_z, use_orig_codes=True)
 
                         code_list.append(edge_code.detach())
                         y_list.append(y)
@@ -520,11 +529,11 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
                     if use_proto_clf:
                         if query_node_code_first:
                             # Case 1: Use node code to form edge code
-                            code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                            code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                             edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                         else:
                             # Case 2: Query edge code using edge embeddings directly
-                            edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
+                            edge_code, indices, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
 
                         query_emb = edge_z if model.use_z_in_predict else edge_code
 
@@ -584,11 +593,11 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
 
                         if query_node_code_first:
                             # Case 1: Use node code to form edge code
-                            code, _ = model.get_codes(z, use_orig_codes=True)
+                            code, indices, _ = model.get_codes(z, use_orig_codes=True)
                             edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                         else:
                             # Case 2: Query edge code using edge embeddings directly
-                            edge_code, _ = model.get_codes(edge_z, use_orig_codes=True)
+                            edge_code, indices, _ = model.get_codes(edge_z, use_orig_codes=True)
 
                         code_list.append(edge_code.detach())
                         y_list.append(y)
@@ -615,11 +624,11 @@ def eval_link(model, dataset, loader, split, labels, params, **kwargs):
                     if use_proto_clf:
                         if query_node_code_first:
                             # Case 1: Use node code to form edge code
-                            code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                            code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                             edge_code = (code[edge_label_index[0]] + code[edge_label_index[1]]) / 2
                         else:
                             # Case 2: Query edge code using edge embeddings directly
-                            edge_code, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
+                            edge_code, indices, commit_loss = model.get_codes(edge_z, use_orig_codes=True)
 
                         query_emb = edge_z if model.use_z_in_predict else edge_code
 

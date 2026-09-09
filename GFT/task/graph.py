@@ -51,7 +51,7 @@ def ft_graph(model, dataset, loader, optimizer, split, labels, params, scheduler
             # Use graph embedding to query code
 
             z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-            code, _ = model.get_codes(z, use_orig_codes=True)
+            code, indices, _ = model.get_codes(z, use_orig_codes=True)
             code_list.append(code.detach())
 
         code = torch.cat(code_list, dim=0)
@@ -74,7 +74,7 @@ def ft_graph(model, dataset, loader, optimizer, split, labels, params, scheduler
         z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
 
         if use_proto_clf:
-            code, commit_loss = model.get_codes(z, use_orig_codes=True)
+            code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
             query_emb = z if params['use_z_in_predict'] else code
             proto_loss = model.compute_proto_loss(query_emb, proto_emb, y, task="multi") * params["lambda_proto"]
 
@@ -82,7 +82,16 @@ def ft_graph(model, dataset, loader, optimizer, split, labels, params, scheduler
             act_loss = model.compute_activation_loss(z, y, task="multi") * params["lambda_act"]
 
         loss = proto_loss + act_loss
-
+        if params.get('uniform_reg_weight', 0) > 0:
+            num_codes = params['codebook_size'] * params['codebook_head']  # общее количество кодов
+            flat_indices = indices.flatten()
+            counts = torch.bincount(flat_indices, minlength=num_codes)
+            probs = counts.float() / (counts.sum() + 1e-8)
+            # KL-дивергенция между probs и равномерным распределением
+            uniform = torch.full_like(probs, 1.0 / num_codes)
+            kl = (probs * (torch.log(probs + 1e-8) - torch.log(uniform))).sum()
+            uniform_loss = params['uniform_reg_weight'] * kl
+            loss = loss + uniform_loss
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -159,7 +168,7 @@ def eval_graph_single(model, dataset, loader, split, labels, params, **kwargs):
             edge_attr = batch.edge_text_feat
 
             z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-            code, _ = model.get_codes(z, use_orig_codes=True)
+            code, indices, _ = model.get_codes(z, use_orig_codes=True)
             code_list.append(code.detach())
 
         code = torch.cat(code_list, dim=0)
@@ -176,7 +185,7 @@ def eval_graph_single(model, dataset, loader, split, labels, params, **kwargs):
         z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
 
         if use_proto_clf:
-            code, commit_loss = model.get_codes(z, use_orig_codes=True)
+            code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
             query_emb = z if model.use_z_in_predict else code
             pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
         if use_lin_clf:
@@ -234,7 +243,7 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
                 edge_attr = batch.edge_text_feat
 
                 z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-                code, _ = model.get_codes(z, use_orig_codes=True)
+                code, indices, _ = model.get_codes(z, use_orig_codes=True)
                 code_list.append(code.detach())
 
             code = torch.cat(code_list, dim=0)
@@ -260,7 +269,7 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
 
             z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
             if use_proto_clf:
-                code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                 query_emb = z if model.use_z_in_predict else code
                 pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
             if use_lin_clf:
@@ -302,7 +311,7 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
                 edge_attr = batch.edge_text_feat
 
                 z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
-                code, _ = model.get_codes(z, use_orig_codes=True)
+                code, indices, _ = model.get_codes(z, use_orig_codes=True)
                 code_list.append(code.detach())
 
             code = torch.cat(code_list, dim=0)
@@ -329,7 +338,7 @@ def eval_graph_few_shot(model, dataset, loader, split, labels, params, **kwargs)
             z = model.encode_graph(x, edge_index, edge_attr, batch.batch, pool="mean")
 
             if use_proto_clf:
-                code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                 query_emb = z if model.use_z_in_predict else code
                 pred_proto = model.get_proto_logits(query_emb, proto_emb, task="multi")
             if use_lin_clf:

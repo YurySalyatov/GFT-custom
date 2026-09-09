@@ -37,7 +37,7 @@ def ft_node(model, dataset, loader, optimizer, split, labels, params, scheduler=
 
         if use_proto_clf:
             # Compute Prototypes
-            code_train, commit_loss = model.get_codes(z_train, use_orig_codes=True)
+            code_train, indices, commit_loss = model.get_codes(z_train, use_orig_codes=True)
 
             proto_emb = model.get_class_prototypes(code_train, y_train, num_classes).detach()
             query_emb = z_train if params['use_z_in_predict'] else code_train
@@ -50,7 +50,16 @@ def ft_node(model, dataset, loader, optimizer, split, labels, params, scheduler=
             act_loss = model.compute_activation_loss(z_train, y_train) * params["lambda_act"]
 
         loss = proto_loss + act_loss
-
+        if params.get('uniform_reg_weight', 0) > 0:
+            num_codes = params['codebook_size'] * params['codebook_head']  # общее количество кодов
+            flat_indices = indices.flatten()
+            counts = torch.bincount(flat_indices, minlength=num_codes)
+            probs = counts.float() / (counts.sum() + 1e-8)
+            # KL-дивергенция между probs и равномерным распределением
+            uniform = torch.full_like(probs, 1.0 / num_codes)
+            kl = (probs * (torch.log(probs + 1e-8) - torch.log(uniform))).sum()
+            uniform_loss = params['uniform_reg_weight'] * kl
+            loss = loss + uniform_loss
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -103,7 +112,7 @@ def ft_node(model, dataset, loader, optimizer, split, labels, params, scheduler=
                 y = batch.y[:bs]
                 z = model.encode(x, edge_index, edge_attr)[:bs]
 
-                code, _ = model.get_codes(z, use_orig_codes=True)
+                code, indices, _ = model.get_codes(z, use_orig_codes=True)
                 code_list.append(code.detach())
                 y_list.append(y)
 
@@ -130,7 +139,7 @@ def ft_node(model, dataset, loader, optimizer, split, labels, params, scheduler=
             z = model.encode(x, edge_index, edge_attr)[:bs]
 
             if use_proto_clf:
-                code, commit_loss = model.get_codes(z, use_orig_codes=True)
+                code, indices, commit_loss = model.get_codes(z, use_orig_codes=True)
                 query_emb = z if params['use_z_in_predict'] else code
                 proto_loss = model.compute_proto_loss(query_emb, proto_emb, y) * params["lambda_proto"]
             if use_lin_clf:
@@ -183,7 +192,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
             if use_proto_clf:
                 # Compute Prototypes
                 train_mask = split["train"]
-                code, _ = model.get_codes(z, use_orig_codes=True)
+                code, indices, _ = model.get_codes(z, use_orig_codes=True)
                 code_train, y_train = code[train_mask], y[train_mask]
 
                 proto_emb = model.get_class_prototypes(code_train, y_train, num_classes).detach()
@@ -218,7 +227,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                 q_mask = split["valid"]["query"][i]
 
                 if use_proto_clf:
-                    code, _ = model.get_codes(z, use_orig_codes=True)
+                    code, indices, _ = model.get_codes(z, use_orig_codes=True)
                     code_support, y_support = code[s_mask], y[s_mask]
                     z_query, code_query, y_query = z[q_mask], code[q_mask], y[q_mask]
 
@@ -245,7 +254,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                 if use_proto_clf:
                     # Compute Prototypes
 
-                    code, _ = model.get_codes(z, use_orig_codes=True)
+                    code, indices, _ = model.get_codes(z, use_orig_codes=True)
                     code_support, y_support = code[s_mask], y[s_mask]
                     z_query, code_query, y_query = z[q_mask], code[q_mask], y[q_mask]
 
@@ -305,7 +314,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                     y = batch.y[:bs]
                     z = model.encode(x, edge_index, edge_attr)[:bs]
 
-                    code, _ = model.get_codes(z, use_orig_codes=True)
+                    code, indices, _ = model.get_codes(z, use_orig_codes=True)
                     code_list.append(code.detach())
                     y_list.append(y)
 
@@ -330,7 +339,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                 z = model.encode(x, edge_index, edge_attr)[:bs]
 
                 if use_proto_clf:
-                    code, _ = model.get_codes(z, use_orig_codes=True)
+                    code, indices, _ = model.get_codes(z, use_orig_codes=True)
                     query_emb = z if model.use_z_in_predict else code
                     pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
 
@@ -398,7 +407,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                         y = batch.y[:bs]
                         z = model.encode(x, edge_index, edge_attr)[:bs]
 
-                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        code, indices, _ = model.get_codes(z, use_orig_codes=True)
                         code_list.append(code.detach())
                         y_list.append(y)
                     code = torch.cat(code_list, dim=0)
@@ -421,7 +430,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                     z = model.encode(x, edge_index, edge_attr)[:bs]
 
                     if use_proto_clf:
-                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        code, indices, _ = model.get_codes(z, use_orig_codes=True)
                         query_emb = z if model.use_z_in_predict else code
                         pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
 
@@ -477,7 +486,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                         y = batch.y[:bs]
                         z = model.encode(x, edge_index, edge_attr)[:bs]
 
-                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        code, indices, _ = model.get_codes(z, use_orig_codes=True)
                         code_list.append(code.detach())
                         y_list.append(y)
                     code = torch.cat(code_list, dim=0)
@@ -500,7 +509,7 @@ def eval_node(model, dataset, loader, split, labels, params, **kwargs):
                     z = model.encode(x, edge_index, edge_attr)[:bs]
 
                     if use_proto_clf:
-                        code, _ = model.get_codes(z, use_orig_codes=True)
+                        code, indices, _ = model.get_codes(z, use_orig_codes=True)
                         query_emb = z if model.use_z_in_predict else code
                         pred_proto = model.get_proto_logits(query_emb, proto_emb).softmax(dim=-1)
 

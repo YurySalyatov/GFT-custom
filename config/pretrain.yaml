@@ -27,3 +27,4 @@ topo_sem_lambda: 100
 sem_lambda: 1
 sem_encoder_decay: 0.99
 use_schedular: True
+uniform_reg_weight: 0.01

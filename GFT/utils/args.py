@@ -48,6 +48,8 @@ def get_args_pretrain():
     parser.add_argument('--save_name', type=str, default='all',
                         help='Name for the checkpoint subfolder (e.g., arnetminer_qian)')
 
+    parser.add_argument('--uniform_reg_weight', type=float, default=0.01, help='Weight for uniformity regularization')
+
     args = parser.parse_args()
     return vars(args)
 
